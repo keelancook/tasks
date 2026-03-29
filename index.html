@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --rule: rgba(0,0,0,0.12); 
+            --text: #1a1a1a; 
+            --priority: #991b1b; 
+            --line: 52px;
+            --paper-today: #ffffff;
+            --paper-next: #efdfb4;     
+            --paper-someday: #c7b399;  
+            --paper-archive: #c7b399; 
+        }
+        
+        body { 
+            margin: 0; padding: 0; background: #1a1a1a; 
+            font-family: 'Nanum Pen Script', cursive; 
+            overflow: hidden; height: 100vh; width: 100vw;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #vp { width: 100%; height: 100vh; position: relative; overflow: hidden; }
+        
+        .card { 
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0; 
+            transition: transform 0.4s cubic-bezier(0.2, 1, 0.3, 1); 
+        }
+
+        .c-today { background: var(--paper-today); }
+        .c-next { background: var(--paper-next); }
+        .c-someday { background: var(--paper-someday); }
+        .c-archive { background: var(--paper-archive); }
+
+        .hdr { 
+            height: 100px; display: flex; align-items: flex-start; justify-content: space-between;
+            padding: 20px 20px 0 20px; box-sizing: border-box; 
+        }
+        
+        .hdr b { 
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 26px; font-weight: 500; letter-spacing: 2px; 
+            text-transform: uppercase; color: #000;
+        }
+        
+        .hdr span { font-size: 22px; color: rgba(0,0,0,0.5); text-align: right; padding-top: 2px; }
+
+        .settings-trigger, .dots, .hndl, .btn-c, .fin-btn, .m-item {
+            transition: opacity 0.1s, transform 0.1s;
+            cursor: pointer;
+        }
+        .settings-trigger:active, .dots:active, .hndl:active, .btn-c:active, .fin-btn:active, .m-item:active {
+            opacity: 0.4;
+            transform: scale(0.96);
+        }
+
+        .settings-trigger { width: 24px; height: 24px; fill: rgba(0,0,0,0.6); margin-top: 4px; outline: none; }
+
+        ul { list-style: none; margin: 0; padding: 0; }
+        li { 
+            height: var(--line); display: flex; align-items: center; 
+            padding: 0 10px 0 12px; position: relative; background: transparent; touch-action: none; 
+            box-sizing: border-box;
+        }
+
+        li::after { content: ""; position: absolute; bottom: 0; left: 48px; right: 15px; height: 1px; background-color: var(--rule); }
+
+        .btn-c { width: 18px; height: 18px; border: 1.2px solid #000; border-radius: 50%; margin-right: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 2; background: transparent; }
+        .today-list li:nth-child(-n+3) .btn-c { border-color: var(--priority); border-width: 2px; }
+        
+        .dot-in { width: 10px; height: 10px; background: #000; border-radius: 50%; }
+        .del-arrow { width: 100%; height: 100%; color: inherit; }
+
+        input { 
+            flex: 1; border: none; font-size: 24px; outline: none; 
+            background: transparent; color: var(--text); z-index: 2; 
+            font-family: 'Nanum Pen Script', cursive; min-width: 0; padding-top: 4px;
+        }
+        .done { text-decoration: line-through; color: rgba(0,0,0,0.45); opacity: 0.7; }
+
+        .ctrls { display: flex; align-items: center; gap: 4px; color: rgba(0,0,0,0.3); z-index: 2; flex-shrink: 0; margin-left: 5px; font-family: sans-serif; }
+        .dots { padding: 4px; font-size: 18px; line-height: 1; }
+        .hndl { padding: 4px; font-size: 16px; }
+
+        .fin-btn {
+            width: 100%; padding: 14px; background: #fff; color: #000; 
+            border: 1px solid #000; border-radius: 8px; 
+            font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 18px; 
+            letter-spacing: 2px; text-transform: uppercase;
+        }
+
+        #menu, #settings-menu { 
+            position: fixed; bottom: -100%; left: 0; width: 100%; background: #fff; 
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-radius: 24px 24px 0 0; 
+            transition: 0.3s cubic-bezier(0.2, 1, 0.3, 1); z-index: 100; padding-bottom: 40px; font-family: sans-serif; 
+        }
+        #menu.open, #settings-menu.open { bottom: 0; }
+        .m-item { padding: 20px; text-align: center; border-bottom: 1px solid #f5f5f5; color: #111; font-size: 16px; font-weight: 600; }
+        #ov { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 90; }
+
+        .arch-item { padding: 18px 15px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: center; }
+        .del-card { color: #ef4444; font-size: 22px; padding: 0 10px; opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <div id="vp"><div id="card" class="card"></div></div>
+    <div id="ov" onclick="closeAll()"></div>
+    
+    <div id="menu">
+        <div id="m-context-title" style="padding:15px; font-size:12px; color:#999; text-transform:uppercase; text-align:center; border-bottom:1px solid #eee;">Options</div>
+        <div id="m-options-container"></div>
+        <div class="m-item" style="opacity:0.5; font-weight:400;" onclick="closeAll()">Cancel</div>
+    </div>
+
+    <div id="settings-menu">
+        <div class="m-item" onclick="exportMarkdown()">Export History (Markdown)</div>
+        <div class="m-item" onclick="exportData()">Backup System (JSON)</div>
+        <div class="m-item" onclick="importData()">Restore System (JSON)</div>
+        <div class="m-item" style="opacity:0.5; font-weight:400;" onclick="closeAll()">Close</div>
+    </div>
+
+    <input type="file" id="fileInput" style="display:none" accept=".json">
+
+<script>
+    let cur = 0, sel = null, arcFocus = null;
+    const VERSION_KEY = 'v29';
+
+    let db = {
+        today: JSON.parse(localStorage.getItem(VERSION_KEY+'_t')) || Array(10).fill().map(()=>({t:"", s:0})),
+        next: JSON.parse(localStorage.getItem(VERSION_KEY+'_n')) || Array(10).fill().map(()=>({t:"", s:0})),
+        someday: JSON.parse(localStorage.getItem(VERSION_KEY+'_s')) || Array(10).fill().map(()=>({t:"", s:0})),
+        archive: JSON.parse(localStorage.getItem(VERSION_KEY+'_a')) || [],
+        lastActiveDate: localStorage.getItem(VERSION_KEY+'_lastDate') || ""
+    };
+
+    const gearSVG = `<svg class="settings-trigger" onclick="openSettings()" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
+    const delSVG = `<svg class="del-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="12" x2="17" y2="12"></line><polyline points="12 7 17 12 12 17"></polyline></svg>`;
+
+    function save() { 
+        localStorage.setItem(VERSION_KEY+'_t', JSON.stringify(db.today)); 
+        localStorage.setItem(VERSION_KEY+'_n', JSON.stringify(db.next)); 
+        localStorage.setItem(VERSION_KEY+'_s', JSON.stringify(db.someday)); 
+        localStorage.setItem(VERSION_KEY+'_a', JSON.stringify(db.archive)); 
+        localStorage.setItem(VERSION_KEY+'_lastDate', db.lastActiveDate);
+    }
+
+    function getShortDate(dObj) {
+        const m = dObj.toLocaleDateString('en-US', { month: 'short' });
+        const d = dObj.getDate();
+        const y = dObj.getFullYear();
+        return `${m} ${d}, ${y}`;
+    }
+
+    function checkDateRollover() {
+        const todayStr = getShortDate(new Date());
+        if (db.lastActiveDate !== "" && db.lastActiveDate !== todayStr) {
+            const hasTasks = db.today.some(x => x.t.trim() !== "");
+            if (hasTasks) db.archive.push({d: db.lastActiveDate, tasks: JSON.parse(JSON.stringify(db.today))});
+            db.today = Array(10).fill().map(()=>({t:"", s:0}));
+        }
+        db.lastActiveDate = todayStr;
+        save();
+    }
+
+    function render() {
+        const views = ['today', 'next', 'someday', 'archive'];
+        const classMap = ['c-today', 'c-next', 'c-someday', 'c-archive'];
+        const v = views[cur];
+        const el = document.getElementById('card');
+        el.className = 'card ' + classMap[cur];
+
+        if(cur === 3 && !arcFocus) {
+            el.innerHTML = `<div class="hdr"><b>Archive</b>${gearSVG}</div><div id="arch-list" style="overflow-y:auto; height:calc(100% - 100px)"></div>`;
+            const list = document.getElementById('arch-list');
+            db.archive.slice().reverse().forEach((e, originalIdx) => {
+                let realIdx = db.archive.length - 1 - originalIdx;
+                let r = document.createElement('div'); r.className='arch-item';
+                r.innerHTML = `<div style="flex:1" onclick="viewArc(${realIdx})"><b>${e.d}</b><br><small style="color:rgba(0,0,0,0.5); font-family:sans-serif; font-size:11px">${e.tasks.filter(x=>x.s==1).length} Completed</small></div><div class="del-card" onclick="delArch(event, ${realIdx})">×</div>`;
+                list.appendChild(r);
+            });
+            return;
+        }
+
+        const data = arcFocus ? arcFocus.tasks : db[v];
+        const title = arcFocus ? 'History' : v.charAt(0).toUpperCase() + v.slice(1);
+        let subtitle = arcFocus ? arcFocus.d : (cur === 0 ? getShortDate(new Date()) : (cur === 1 ? "Priority" : "Ideas"));
+
+        el.innerHTML = `<div class="hdr"><b>${title}</b><span>${subtitle}</span></div><ul id="list" class="${cur===0?'today-list':''}"></ul>`;
+        if(cur===0 && !arcFocus) el.innerHTML += `<div style="padding:15px 25px;"><button class="fin-btn" onclick="fin()">FINISH DAY</button></div>`;
+
+        const list = document.getElementById('list');
+        data.forEach((item, i) => {
+            let li = document.createElement('li');
+            li.dataset.idx = i;
+            let icon = item.s==1 ? '<div class="dot-in"></div>' : (item.s==2 ? delSVG : '');
+            li.innerHTML = `
+                <div class="btn-c" onclick="tgl(${i})">${icon}</div>
+                <input type="text" value="${item.t}" oninput="upd(${i},this.value)" class="${item.s==1?'done':''}">
+                <div class="ctrls">
+                    <span class="dots" onclick="openM(${i})">⋮</span>
+                    <span class="hndl" onpointerdown="startDrag(event, ${i})">⠿</span>
+                </div>`;
+            list.appendChild(li);
+        });
+    }
+
+    function openM(i) { 
+        sel=i; 
+        const container = document.getElementById('m-options-container');
+        container.innerHTML = '';
+        const currentView = ['today', 'next', 'someday', 'archive'][cur];
+        
+        const addOption = (label, action, color) => {
+            const div = document.createElement('div');
+            div.className = 'm-item';
+            if(color) div.style.color = color;
+            div.innerText = label;
+            div.onclick = () => mAct(action);
+            container.appendChild(div);
+        };
+
+        if(arcFocus) {
+            document.getElementById('m-context-title').innerText = "Restore from Archive";
+            addOption("Restore to Today", "today");
+            addOption("Restore to Next", "next");
+            addOption("Restore to Someday", "someday");
+        } else {
+            document.getElementById('m-context-title').innerText = "Move Task";
+            if(currentView !== 'today') addOption("Move to Today", "today");
+            if(currentView !== 'next') addOption("Move to Next", "next");
+            if(currentView !== 'someday') addOption("Move to Someday", "someday");
+            addOption("Delete Task", "del", "red");
+        }
+
+        document.getElementById('menu').classList.add('open'); 
+        document.getElementById('ov').style.display='block'; 
+    }
+
+    function mAct(a) { 
+        let sourceData = arcFocus ? arcFocus.tasks : db[['today', 'next', 'someday', 'archive'][cur]];
+        let taskCopy = {...sourceData[sel], s: 0};
+
+        if (a === 'del') {
+            sourceData[sel] = {t:"", s:0};
+        } else {
+            // Find empty slot or push
+            let targetIdx = db[a].findIndex(x => x.t.trim() === "");
+            if(targetIdx !== -1) db[a][targetIdx] = taskCopy;
+            else db[a].push(taskCopy);
+            
+            if(!arcFocus) sourceData[sel] = {t:"", s:0};
+        }
+        
+        save(); render(); closeAll();
+    }
+
+    // Standard Utils
+    function save() { 
+        localStorage.setItem(VERSION_KEY+'_t', JSON.stringify(db.today)); 
+        localStorage.setItem(VERSION_KEY+'_n', JSON.stringify(db.next)); 
+        localStorage.setItem(VERSION_KEY+'_s', JSON.stringify(db.someday)); 
+        localStorage.setItem(VERSION_KEY+'_a', JSON.stringify(db.archive)); 
+        localStorage.setItem(VERSION_KEY+'_lastDate', db.lastActiveDate);
+    }
+    function exportMarkdown() {
+        let md = `# Analog Card History\nExported: ${new Date().toLocaleDateString()}\n\n`;
+        const formatSection = (title, subtitle, tasks) => {
+            let section = `## ${title} (${subtitle})\n`;
+            tasks.forEach(t => { if(!t.t.trim()) return; section += `${t.s===1?'- [x]':'- [ ]'} ${t.t}\n`; });
+            return section + "\n";
+        };
+        md += formatSection("Today", getShortDate(new Date()), db.today);
+        md += formatSection("Next", "Priority", db.next);
+        md += formatSection("Someday", "Ideas", db.someday);
+        md += "--- \n# Archive\n\n";
+        db.archive.slice().reverse().forEach(entry => { md += formatSection("Card", entry.d, entry.tasks); });
+        const blob = new Blob([md], {type: 'text/markdown'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `analog_history_${new Date().toISOString().slice(0,10)}.md`;
+        a.click(); closeAll();
+    }
+    function openSettings() { document.getElementById('settings-menu').classList.add('open'); document.getElementById('ov').style.display='block'; }
+    function closeAll() { document.getElementById('menu').classList.remove('open'); document.getElementById('settings-menu').classList.remove('open'); document.getElementById('ov').style.display='none'; }
+    function exportData() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
+        const a = document.createElement('a'); a.setAttribute("href", dataStr);
+        a.setAttribute("download", "analog_backup_" + new Date().toISOString().slice(0,10) + ".json");
+        a.click(); closeAll();
+    }
+    function importData() { document.getElementById('fileInput').click(); }
+    document.getElementById('fileInput').onchange = e => {
+        const reader = new FileReader();
+        reader.onload = ev => { try { db = JSON.parse(ev.target.result); save(); render(); closeAll(); } catch(e) { alert("Invalid file."); } };
+        reader.readAsText(e.target.files[0]);
+    };
+    function jump(dir) {
+        let el = document.getElementById('card');
+        el.style.transform = `translateX(${-dir * 100}%)`;
+        setTimeout(() => {
+            cur = (cur + dir + 4) % 4; arcFocus = null;
+            el.style.transition = 'none'; el.style.transform = `translateX(${dir * 100}%)`;
+            render();
+            setTimeout(() => { el.style.transition = 'transform 0.4s cubic-bezier(0.2, 1, 0.3, 1)'; el.style.transform = 'translateX(0)'; }, 10);
+        }, 300);
+    }
+    function viewArc(i) { arcFocus = { tasks: db.archive[i].tasks, d: db.archive[i].d, originalIdx: i }; render(); }
+    function delArch(e, i) { e.stopPropagation(); if(confirm("Delete this card?")) { db.archive.splice(i, 1); save(); render(); } }
+    function tgl(i) { if(arcFocus)return; let v=['today','next','someday','archive'][cur]; db[v][i].s=(db[v][i].s+1)%3; save(); render(); }
+    function upd(i,v) { if(arcFocus)return; db[['today','next','someday','archive'][cur]][i].t=v; save(); }
+    function fin() {
+        if(!confirm("Archive today?")) return;
+        db.archive.push({d: getShortDate(new Date()), tasks: JSON.parse(JSON.stringify(db.today))});
+        db.today = Array(10).fill().map(()=>({t:"", s:0}));
+        save(); render();
+    }
+
+    let dragEl = null;
+    function startDrag(e, i) { if(arcFocus) return; dragEl = e.target.closest('li'); dragEl.setPointerCapture(e.pointerId); }
+    document.addEventListener('pointermove', e => {
+        if(!dragEl) return;
+        let list = document.getElementById('list');
+        let next = [...list.querySelectorAll('li:not(.dragging)')].find(s => e.clientY <= s.getBoundingClientRect().top + s.offsetHeight/2);
+        list.insertBefore(dragEl, next);
+    });
+    document.addEventListener('pointerup', e => {
+        if(!dragEl) return;
+        let v = ['today','next','someday','archive'][cur];
+        db[v] = [...document.querySelectorAll('#list li')].map(li => db[v][li.dataset.idx]);
+        dragEl = null; save(); render();
+    });
+    let sX = 0;
+    document.addEventListener('touchstart', e => sX = e.touches[0].clientX);
+    document.addEventListener('touchend', e => {
+        let diff = e.changedTouches[0].clientX - sX;
+        if(Math.abs(diff) > 70) {
+            if(arcFocus){ arcFocus=null; render(); return; }
+            jump(-Math.sign(diff));
+        }
+    });
+
+    checkDateRollover();
+    render();
+</script>
+</body>
+</html>
