@@ -68,14 +68,18 @@
         .hndl { font-size: 20px; }
 
         .fin-btn { padding: 8px 18px; background: #fff; color: #000; border: 1px solid rgba(0,0,0,0.4); border-radius: 6px; font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
-        .undo-btn { font-family: 'Cormorant Garamond', serif; font-size: 12px; color: #991b1b; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; margin-top: 5px; display: block; border: 1px solid #991b1b; padding: 2px 6px; border-radius: 4px; }
         
         #menu, #settings-menu { position: fixed; bottom: -100%; left: 0; width: 100%; background: #fff; box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-radius: 24px 24px 0 0; transition: 0.3s cubic-bezier(0.2, 1, 0.3, 1); z-index: 100; padding-bottom: 40px; font-family: sans-serif; }
         #menu.open, #settings-menu.open { bottom: 0; }
         .m-item { padding: 20px; text-align: center; border-bottom: 1px solid #f5f5f5; color: #111; font-size: 16px; font-weight: 600; cursor: pointer; }
         #ov { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 90; }
 
-        .arch-item { padding: 20px 15px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: center; }
+        .arch-item { padding: 20px 15px; border-bottom: 1px solid var(--rule); display: flex; align-items: center; }
+        .arch-date { flex: 1; font-size: 28px; cursor: pointer; }
+        .arch-ctrl { font-size: 24px; padding: 10px; cursor: pointer; user-select: none; }
+        .arch-undo { color: #000; opacity: 0.6; }
+        .arch-del { color: #991b1b; }
+        
         .settings-trigger { width: 24px; height: 24px; fill: rgba(0,0,0,0.6); margin-top: 4px; cursor: pointer; }
     </style>
 </head>
@@ -130,7 +134,7 @@
         const views = ['today', 'next', 'someday', 'archive'];
         const v = views[cur];
         const el = document.getElementById('card');
-        const todayDate = getShortDate(new Date());
+        const todayShort = getShortDate(new Date());
         el.className = 'card ' + (arcFocus ? 'c-archive' : 'c-' + v);
 
         if(cur === 3 && !arcFocus) {
@@ -138,8 +142,12 @@
             el.innerHTML = `<div class="hdr"><b>Archive</b>${gear}</div><div id="arch-list" style="overflow-y:auto; height:calc(100% - 100px)"></div>`;
             db.archive.slice().reverse().forEach((e, i) => {
                 let realIdx = db.archive.length - 1 - i;
+                let isToday = e.d === todayShort;
                 let r = document.createElement('div'); r.className='arch-item';
-                r.innerHTML = `<div style="font-size:28px" onclick="viewArc(${realIdx})">${e.d}</div><div style="color:red; font-size:24px; padding:10px;" onclick="delArch(event, ${realIdx})">×</div>`;
+                r.innerHTML = `
+                    <div class="arch-date" onclick="viewArc(${realIdx})">${e.d}</div>
+                    ${isToday ? `<div class="arch-ctrl arch-undo" onclick="undoFin(${realIdx})">⟲</div>` : ''}
+                    <div class="arch-ctrl arch-del" onclick="delArch(event, ${realIdx})">×</div>`;
                 document.getElementById('arch-list').appendChild(r);
             });
             return;
@@ -147,11 +155,9 @@
 
         const data = arcFocus ? arcFocus.tasks : db[v];
         const title = arcFocus ? 'History' : v.charAt(0).toUpperCase() + v.slice(1);
-        let sub = arcFocus ? arcFocus.d : (cur === 0 ? todayDate : (cur === 1 ? "Priority" : "Ideas"));
-        
-        let undoHtml = (arcFocus && arcFocus.d === todayDate) ? `<div class="undo-btn" onclick="undoFin()">Undo Archive</div>` : "";
+        let sub = arcFocus ? arcFocus.d : (cur === 0 ? todayShort : (cur === 1 ? "Priority" : "Ideas"));
 
-        el.innerHTML = `<div class="hdr"><b>${title}</b><span>${sub}${undoHtml}</span></div><ul id="list" class="${cur===0?'today-list':''}"></ul><div id="btn-container"></div>`;
+        el.innerHTML = `<div class="hdr"><b>${title}</b><span>${sub}</span></div><ul id="list" class="${cur===0?'today-list':''}"></ul><div id="btn-container"></div>`;
         updateTodayButton();
 
         const list = document.getElementById('list');
@@ -250,12 +256,12 @@
         save(); if(!isAuto) render(); 
     }
 
-    function undoFin() {
-        if(!confirm("Revert this archive back to your active Today card?")) return;
-        let last = db.archive.pop();
-        db.today = last.tasks;
+    function undoFin(idx) {
+        if(!confirm("Restore this card to Today?")) return;
+        let card = db.archive.splice(idx, 1)[0];
+        db.today = card.tasks;
         arcFocus = null;
-        cur = 0; // Jump back to today view
+        cur = 0; 
         save(); render();
     }
 
