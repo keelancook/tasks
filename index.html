@@ -74,11 +74,16 @@
         .m-item { padding: 20px; text-align: center; border-bottom: 1px solid #f5f5f5; color: #111; font-size: 16px; font-weight: 600; cursor: pointer; }
         #ov { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 90; }
 
-        .arch-item { padding: 20px 15px; border-bottom: 1px solid var(--rule); display: flex; align-items: center; }
-        .arch-date { flex: 1; font-size: 28px; cursor: pointer; }
-        .arch-ctrl { font-size: 24px; padding: 10px; cursor: pointer; user-select: none; }
+        .arch-item { padding: 12px 20px; border-bottom: 1px solid var(--rule); display: flex; align-items: center; }
+        .arch-date { flex: 1; font-size: 28px; cursor: pointer; padding: 5px 0; }
+        .arch-ctrls { display: flex; align-items: center; gap: 4px; }
+        .arch-btn { 
+            width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; 
+            font-size: 26px; cursor: pointer; user-select: none; border-radius: 50%;
+        }
         .arch-undo { color: #000; opacity: 0.6; }
         .arch-del { color: #991b1b; }
+        .arch-btn:active { background: rgba(0,0,0,0.05); }
         
         .settings-trigger { width: 24px; height: 24px; fill: rgba(0,0,0,0.6); margin-top: 4px; cursor: pointer; }
     </style>
@@ -146,8 +151,10 @@
                 let r = document.createElement('div'); r.className='arch-item';
                 r.innerHTML = `
                     <div class="arch-date" onclick="viewArc(${realIdx})">${e.d}</div>
-                    ${isToday ? `<div class="arch-ctrl arch-undo" onclick="undoFin(${realIdx})">⟲</div>` : ''}
-                    <div class="arch-ctrl arch-del" onclick="delArch(event, ${realIdx})">×</div>`;
+                    <div class="arch-ctrls">
+                        ${isToday ? `<div class="arch-btn arch-undo" onclick="undoFin(${realIdx})">⟲</div>` : ''}
+                        <div class="arch-btn arch-del" onclick="delArch(event, ${realIdx})">×</div>
+                    </div>`;
                 document.getElementById('arch-list').appendChild(r);
             });
             return;
@@ -238,7 +245,7 @@
         if (a === 'del') { src[sel] = {t:"", s:0}; } 
         else {
             let ti = db[a].findIndex(x => x.t.trim() === "");
-            let newTask = {t: src[sel].t, s: 0}; 
+            let newTask = {t: src[sel].t, s: src[sel].s}; 
             if(ti !== -1) db[a][ti] = newTask; else db[a].push(newTask);
             if(arcFocus) src[sel].s = 3; else src[sel] = {t:"", s:0};
         }
@@ -249,17 +256,28 @@
         if(!isAuto && !confirm("Archive today?")) return; 
         const archiveDate = db.lastActiveDate || getShortDate(new Date());
         db.archive.push({d: archiveDate, tasks: JSON.parse(JSON.stringify(db.today))}); 
-        const migrated = db.today.filter(t => t.s === 3 && t.t.trim() !== "");
+        const migrated = db.today.filter(t => (t.s === 1 || t.s === 3) && t.t.trim() !== "");
         db.today = Array(10).fill().map(()=>({t:"", s:0}));
-        migrated.forEach((t, i) => { if(i < 10) db.today[i] = { t: t.t, s: 0 }; });
+        migrated.forEach((t, i) => { if(i < 10) db.today[i] = { t: t.t, s: t.s }; });
         db.lastActiveDate = new Date().toDateString();
         save(); if(!isAuto) render(); 
     }
 
     function undoFin(idx) {
-        if(!confirm("Restore this card to Today?")) return;
-        let card = db.archive.splice(idx, 1)[0];
-        db.today = card.tasks;
+        if(!confirm("Restore this card to Today? (Tasks will merge with your current Today card)")) return;
+        let archivedCard = db.archive.splice(idx, 1)[0];
+        let archivedTasks = archivedCard.tasks.filter(t => t.t.trim() !== "");
+
+        // Merge logic: fill empty slots first
+        archivedTasks.forEach(task => {
+            let emptyIdx = db.today.findIndex(t => t.t.trim() === "");
+            if (emptyIdx !== -1) {
+                db.today[emptyIdx] = task;
+            } else {
+                db.today.push(task); // Append if current list is full
+            }
+        });
+
         arcFocus = null;
         cur = 0; 
         save(); render();
