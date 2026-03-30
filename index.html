@@ -1,400 +1,402 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
-    <style>
-        :root { 
-            --rule: rgba(0,0,0,0.12); 
-            --text: #1a1a1a; 
-            --priority: #991b1b; 
-            --line: 52px;
-            --paper-today: #ffffff;
-            --paper-next: #efdfb4;     
-            --paper-someday: #c7b399;  
-            --paper-archive: #c7b399; 
-        }
-        
-        body { 
-            margin: 0; padding: 0; background: #1a1a1a; 
-            font-family: 'Nanum Pen Script', cursive; 
-            overflow: hidden; height: 100vh; width: 100vw;
-            -webkit-tap-highlight-color: transparent;
-        }
+{\rtf1\ansi\ansicpg1252\cocoartf2868
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
 
-        #vp { width: 100%; height: 100vh; position: relative; overflow: hidden; }
-        
-        .card { 
-            width: 100%; height: 100%; position: absolute; top: 0; left: 0; 
-            transition: transform 0.4s cubic-bezier(0.2, 1, 0.3, 1); 
-        }
-
-        .c-today { background: var(--paper-today); }
-        .c-next { background: var(--paper-next); }
-        .c-someday { background: var(--paper-someday); }
-        .c-archive { background: var(--paper-archive); }
-
-        .hdr { 
-            height: 100px; display: flex; align-items: flex-start; justify-content: space-between;
-            padding: 20px 20px 0 20px; box-sizing: border-box; 
-        }
-        
-        .hdr b { 
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 26px; font-weight: 500; letter-spacing: 2px; 
-            text-transform: uppercase; color: #000;
-        }
-        
-        .hdr span { font-size: 22px; color: rgba(0,0,0,0.5); text-align: right; padding-top: 2px; }
-
-        .drop-indicator {
-            height: 1.5px;
-            background: #666;
-            margin: 0 15px 0 48px;
-            position: absolute;
-            width: calc(100% - 63px);
-            pointer-events: none;
-            display: none;
-            z-index: 50;
-            opacity: 0.8;
-        }
-        .drop-indicator.priority { background: var(--priority); height: 1.2px; }
-
-        li.dragging { 
-            opacity: 0.8; 
-            transform: scale(1.02); 
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1); 
-            background: rgba(255,255,255,0.4); 
-            z-index: 100;
-        }
-
-        .arch-item { padding: 20px 15px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: center; }
-        .arch-date { font-size: 28px; line-height: 1; flex: 1; }
-        .arch-meta { display: flex; align-items: center; gap: 15px; font-family: sans-serif; font-size: 12px; color: rgba(0,0,0,0.4); }
-
-        #toast {
-            position: fixed; top: -100px; left: 50%; transform: translateX(-50%);
-            width: 90%; max-width: 400px; background: #333; color: #fff;
-            padding: 12px 20px; border-radius: 12px; z-index: 1000;
-            display: flex; align-items: center; justify-content: space-between;
-            font-family: sans-serif; font-size: 13px; box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            transition: top 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-        }
-        #toast.show { top: 20px; }
-        .t-btn { background: #fff; color: #000; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; text-transform: uppercase; }
-
-        .settings-trigger, .dots, .hndl, .btn-c, .fin-btn, .m-item { transition: opacity 0.1s, transform 0.1s; cursor: pointer; outline: none; }
-        .settings-trigger:active, .dots:active, .hndl:active, .btn-c:active, .fin-btn:active, .m-item:active { opacity: 0.4; transform: scale(0.98); }
-
-        .settings-trigger { width: 24px; height: 24px; fill: rgba(0,0,0,0.6); margin-top: 4px; }
-
-        ul { list-style: none; margin: 0; padding: 0; position: relative; }
-        li { 
-            height: var(--line); display: flex; align-items: center; 
-            padding: 0 10px 0 12px; position: relative; background: transparent; touch-action: none; 
-            box-sizing: border-box;
-        }
-        li::after { content: ""; position: absolute; bottom: 0; left: 48px; right: 15px; height: 1px; background-color: var(--rule); }
-
-        .btn-c { width: 18px; height: 18px; border: 1.2px solid #000; border-radius: 50%; margin-right: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 2; background: transparent; }
-        .today-list li:nth-child(-n+3) .btn-c { border-color: var(--priority); border-width: 2px; }
-        
-        .dot-in { width: 10px; height: 10px; background: #000; border-radius: 50%; }
-        .del-arrow { width: 100%; height: 100%; color: inherit; }
-
-        input { 
-            flex: 1; border: none; font-size: 24px; outline: none; 
-            background: transparent; color: var(--text); z-index: 2; 
-            font-family: 'Nanum Pen Script', cursive; min-width: 0; padding-top: 4px;
-        }
-        .done { text-decoration: line-through; color: rgba(0,0,0,0.45); opacity: 0.7; }
-
-        .ctrls { display: flex; align-items: center; gap: 4px; color: rgba(0,0,0,0.3); z-index: 2; flex-shrink: 0; margin-left: 5px; font-family: sans-serif; }
-        .dots { padding: 4px; font-size: 18px; line-height: 1; }
-        .hndl { padding: 4px; font-size: 16px; }
-
-        .fin-btn {
-            padding: 8px 18px; background: #fff; color: #000; 
-            border: 1px solid rgba(0,0,0,0.3); border-radius: 6px; 
-            font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 15px; 
-            letter-spacing: 1.5px; text-transform: uppercase;
-        }
-
-        #menu, #settings-menu { 
-            position: fixed; bottom: -100%; left: 0; width: 100%; background: #fff; 
-            box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-radius: 24px 24px 0 0; 
-            transition: 0.3s cubic-bezier(0.2, 1, 0.3, 1); z-index: 100; padding-bottom: 40px; font-family: sans-serif; 
-        }
-        #menu.open, #settings-menu.open { bottom: 0; }
-        .m-item { padding: 20px; text-align: center; border-bottom: 1px solid #f5f5f5; color: #111; font-size: 16px; font-weight: 600; }
-        #ov { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 90; }
-
-        .del-card { color: #ef4444; font-size: 22px; padding: 0 10px; opacity: 0.5; }
-    </style>
-</head>
-<body>
-    <div id="toast"><span>Time for a weekly backup?</span><button class="t-btn" onclick="exportData(true)">Backup</button></div>
-    <div id="vp"><div id="card" class="card"></div></div>
-    <div id="ov" onclick="closeAll()"></div>
-    <div id="drop-indicator" class="drop-indicator"></div>
-    
-    <div id="menu">
-        <div id="m-context-title" style="padding:15px; font-size:12px; color:#999; text-transform:uppercase; text-align:center; border-bottom:1px solid #eee;">Options</div>
-        <div id="m-options-container"></div>
-        <div class="m-item" style="opacity:0.5; font-weight:400;" onclick="closeAll()">Cancel</div>
-    </div>
-
-    <div id="settings-menu">
-        <div class="m-item" onclick="exportMarkdown()">Export History (Markdown)</div>
-        <div class="m-item" onclick="exportData()">Backup System (JSON)</div>
-        <div class="m-item" onclick="importData()">Restore System (JSON)</div>
-        <div class="m-item" style="opacity:0.5; font-weight:400;" onclick="closeAll()">Close</div>
-    </div>
-
-    <input type="file" id="fileInput" style="display:none" accept=".json">
-
-<script>
-    let cur = 0, sel = null, arcFocus = null;
-    const STORAGE_KEY = 'analog_db';
-
-    function migrateData() {
-        const legacyKeys = ['v35', 'v34', 'v33', 'v32', 'v31'];
-        legacyKeys.forEach(k => {
-            const todayData = localStorage.getItem(k + '_t');
-            if (todayData && !localStorage.getItem(STORAGE_KEY + '_t')) {
-                localStorage.setItem(STORAGE_KEY + '_t', todayData);
-                localStorage.setItem(STORAGE_KEY + '_n', localStorage.getItem(k + '_n'));
-                localStorage.setItem(STORAGE_KEY + '_s', localStorage.getItem(k + '_s'));
-                localStorage.setItem(STORAGE_KEY + '_a', localStorage.getItem(k + '_a'));
-                localStorage.setItem(STORAGE_KEY + '_lastDate', localStorage.getItem(k + '_lastDate'));
-                localStorage.setItem(STORAGE_KEY + '_lastBackup', localStorage.getItem(k + '_lastBackup'));
-            }
-        });
-    }
-
-    migrateData();
-
-    let db = {
-        today: JSON.parse(localStorage.getItem(STORAGE_KEY+'_t')) || Array(10).fill().map(()=>({t:"", s:0})),
-        next: JSON.parse(localStorage.getItem(STORAGE_KEY+'_n')) || Array(10).fill().map(()=>({t:"", s:0})),
-        someday: JSON.parse(localStorage.getItem(STORAGE_KEY+'_s')) || Array(10).fill().map(()=>({t:"", s:0})),
-        archive: JSON.parse(localStorage.getItem(STORAGE_KEY+'_a')) || [],
-        lastActiveDate: localStorage.getItem(STORAGE_KEY+'_lastDate') || "",
-        lastBackup: localStorage.getItem(STORAGE_KEY+'_lastBackup') || Date.now()
-    };
-
-    function save() { 
-        localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today)); 
-        localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next)); 
-        localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday)); 
-        localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive)); 
-        localStorage.setItem(STORAGE_KEY+'_lastDate', db.lastActiveDate);
-        localStorage.setItem(STORAGE_KEY+'_lastBackup', db.lastBackup);
-    }
-
-    function getShortDate(dObj) { return `${dObj.toLocaleDateString('en-US', { month: 'short' })} ${dObj.getDate()}, ${dObj.getFullYear()}`; }
-
-    function render() {
-        const views = ['today', 'next', 'someday', 'archive'];
-        const classMap = ['c-today', 'c-next', 'c-someday', 'c-archive'];
-        const v = views[cur];
-        const el = document.getElementById('card');
-        el.className = 'card ' + classMap[cur];
-
-        if(cur === 3 && !arcFocus) {
-            const gearSVG = `<svg class="settings-trigger" onclick="openSettings()" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
-            el.innerHTML = `<div class="hdr"><b>Archive</b>${gearSVG}</div><div id="arch-list" style="overflow-y:auto; height:calc(100% - 100px)"></div>`;
-            const list = document.getElementById('arch-list');
-            db.archive.slice().reverse().forEach((e, originalIdx) => {
-                let realIdx = db.archive.length - 1 - originalIdx;
-                let r = document.createElement('div'); r.className='arch-item';
-                r.innerHTML = `<div class="arch-date" onclick="viewArc(${realIdx})">${e.d}</div>
-                               <div class="arch-meta"><span>${e.tasks.filter(x=>x.s==1).length} DONE</span><div class="del-card" onclick="delArch(event, ${realIdx})">×</div></div>`;
-                list.appendChild(r);
-            });
-            return;
-        }
-
-        const data = arcFocus ? arcFocus.tasks : db[v];
-        const title = arcFocus ? 'History' : v.charAt(0).toUpperCase() + v.slice(1);
-        let subtitle = arcFocus ? arcFocus.d : (cur === 0 ? getShortDate(new Date()) : (cur === 1 ? "Priority" : "Ideas"));
-
-        el.innerHTML = `<div class="hdr"><b>${title}</b><span>${subtitle}</span></div><ul id="list" class="${cur===0?'today-list':''}"></ul>`;
-        
-        if(cur===0 && !arcFocus) {
-            const hasTasks = db.today.some(x => x.t.trim() !== "");
-            const btnText = hasTasks ? "Finish Day" : "Review Yesterday";
-            const btnFunc = hasTasks ? "fin()" : "viewLastArc()";
-            el.innerHTML += `<div style="padding:10px 25px; text-align:center;"><button class="fin-btn" onclick="${btnFunc}">${btnText}</button></div>`;
-        }
-
-        const list = document.getElementById('list');
-        const delSVG = `<svg class="del-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="12" x2="17" y2="12"></line><polyline points="12 7 17 12 12 17"></polyline></svg>`;
-        data.forEach((item, i) => {
-            let li = document.createElement('li'); li.dataset.idx = i;
-            let icon = item.s==1 ? '<div class="dot-in"></div>' : (item.s==2 ? delSVG : '');
-            li.innerHTML = `<div class="btn-c" onclick="tgl(${i})">${icon}</div>
-                <input type="text" value="${item.t}" oninput="upd(${i},this.value)" class="${item.s==1?'done':''}">
-                <div class="ctrls"><span class="dots" onclick="openM(${i})">⋮</span><span class="hndl" onpointerdown="startDrag(event, ${i})">⠿</span></div>`;
-            list.appendChild(li);
-        });
-    }
-
-    let dragEl = null;
-    function startDrag(e, i) { 
-        if(arcFocus) return; 
-        dragEl = e.target.closest('li'); 
-        dragEl.classList.add('dragging');
-        dragEl.setPointerCapture(e.pointerId); 
-    }
-    document.addEventListener('pointermove', e => {
-        if(!dragEl) return;
-        const list = document.getElementById('list');
-        const indicator = document.getElementById('drop-indicator');
-        if (cur === 0) indicator.classList.add('priority');
-        else indicator.classList.remove('priority');
-        const items = [...list.querySelectorAll('li:not(.dragging)')];
-        let next = items.find(s => e.clientY <= s.getBoundingClientRect().top + s.offsetHeight/2);
-        indicator.style.display = 'block';
-        if (next) indicator.style.top = next.getBoundingClientRect().top + 'px';
-        else if (items.length > 0) indicator.style.top = items[items.length - 1].getBoundingClientRect().bottom + 'px';
-    });
-    document.addEventListener('pointerup', e => {
-        if(!dragEl) return;
-        const list = document.getElementById('list');
-        const indicator = document.getElementById('drop-indicator');
-        const next = [...list.querySelectorAll('li:not(.dragging)')].find(s => e.clientY <= s.getBoundingClientRect().top + s.offsetHeight/2);
-        list.insertBefore(dragEl, next);
-        dragEl.classList.remove('dragging');
-        indicator.style.display = 'none';
-        let v = ['today','next','someday','archive'][cur];
-        db[v] = [...list.querySelectorAll('li')].map(li => db[v][li.dataset.idx]);
-        dragEl = null; save(); render();
-    });
-
-    function viewLastArc() {
-        if(db.archive.length > 0) viewArc(db.archive.length - 1);
-        else alert("No history found.");
-    }
-
-    function openM(i) { 
-        sel=i; const container = document.getElementById('m-options-container'); container.innerHTML = '';
-        const currentView = ['today', 'next', 'someday', 'archive'][cur];
-        const addOption = (label, action, color) => {
-            const div = document.createElement('div'); div.className = 'm-item';
-            if(color) div.style.color = color; div.innerText = label; div.onclick = () => mAct(action);
-            container.appendChild(div);
-        };
-        if(arcFocus) {
-            document.getElementById('m-context-title').innerText = "Review & Migrate";
-            addOption("Migrate to Today", "today"); addOption("Migrate to Next", "next"); addOption("Migrate to Someday", "someday");
-        } else {
-            document.getElementById('m-context-title').innerText = "Move Task";
-            if(currentView !== 'today') addOption("Move to Today", "today");
-            if(currentView !== 'next') addOption("Move to Next", "next");
-            if(currentView !== 'someday') addOption("Move to Someday", "someday");
-            addOption("Delete Task", "del", "red");
-        }
-        document.getElementById('menu').classList.add('open'); document.getElementById('ov').style.display='block'; 
-    }
-
-    function mAct(a) { 
-        let src = arcFocus ? arcFocus.tasks : db[['today', 'next', 'someday', 'archive'][cur]];
-        let taskCopy = {...src[sel]};
-
-        if (a === 'del') { 
-            src[sel] = {t:"", s:0}; 
-        } else {
-            let ti = db[a].findIndex(x => x.t.trim() === "");
-            // Migration from Archive always starts as an Arrow (s=2)
-            let targetStatus = arcFocus ? 2 : taskCopy.s;
-            let newTask = {t: taskCopy.t, s: targetStatus};
-
-            if(ti !== -1) db[a][ti] = newTask; else db[a].push(newTask);
-
-            if(arcFocus) {
-                src[sel].s = 2; // Mark history with arrow
-            } else {
-                src[sel] = {t:"", s:0}; // Remove from active list
-            }
-        }
-        save(); render(); closeAll();
-    }
-
-    function exportData(fromToast = false) {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
-        const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "analog_backup_" + new Date().toISOString().slice(0,10) + ".json"); a.click();
-        db.lastBackup = Date.now(); save();
-        if(fromToast) document.getElementById('toast').classList.remove('show');
-        closeAll();
-    }
-
-    function exportMarkdown() {
-        let md = `# Analog Card History\nExported: ${new Date().toLocaleDateString()}\n\n`;
-        const formatSection = (t, s, tasks) => {
-            let sec = `## ${t} (${s})\n`;
-            tasks.forEach(task => { 
-                if(task.t.trim()) {
-                    let mark = task.s === 1 ? '- [x]' : (task.s === 2 ? '- [>]' : '- [ ]');
-                    sec += `${mark} ${task.t}\n`; 
-                }
-            });
-            return sec + "\n";
-        };
-        md += formatSection("Today", getShortDate(new Date()), db.today);
-        md += formatSection("Next", "Priority", db.next);
-        md += formatSection("Someday", "Ideas", db.someday);
-        md += "--- \n# Archive\n\n";
-        db.archive.slice().reverse().forEach(e => { md += formatSection("Card", e.d, e.tasks); });
-        const blob = new Blob([md], {type: 'text/markdown'});
-        const a = document.createElement('a'); a.setAttribute("href", URL.createObjectURL(blob)); a.setAttribute("download", `analog_history_${new Date().toISOString().slice(0,10)}.md`); a.click(); closeAll();
-    }
-
-    function checkDateRollover() {
-        const todayStr = getShortDate(new Date());
-        if (db.lastActiveDate !== "" && db.lastActiveDate !== todayStr) {
-            if (db.today.some(x => x.t.trim() !== "")) db.archive.push({d: db.lastActiveDate, tasks: JSON.parse(JSON.stringify(db.today))});
-            db.today = Array(10).fill().map(()=>({t:"", s:0}));
-        }
-        db.lastActiveDate = todayStr; save();
-    }
-
-    function checkBackupHealth() { if (Date.now() - db.lastBackup > 7*24*60*60*1000) document.getElementById('toast').classList.add('show'); }
-    function openSettings() { document.getElementById('settings-menu').classList.add('open'); document.getElementById('ov').style.display='block'; }
-    function closeAll() { document.getElementById('menu').classList.remove('open'); document.getElementById('settings-menu').classList.remove('open'); document.getElementById('ov').style.display='none'; }
-    function importData() { document.getElementById('fileInput').click(); }
-    document.getElementById('fileInput').onchange = e => {
-        const reader = new FileReader();
-        reader.onload = ev => { try { db = JSON.parse(ev.target.result); save(); render(); closeAll(); } catch(e) { alert("Invalid file."); } };
-        reader.readAsText(e.target.files[0]);
-    };
-    function jump(dir) {
-        let el = document.getElementById('card'); el.style.transform = `translateX(${-dir * 100}%)`;
-        setTimeout(() => {
-            cur = (cur + dir + 4) % 4; arcFocus = null;
-            el.style.transition = 'none'; el.style.transform = `translateX(${dir * 100}%)`;
-            render();
-            setTimeout(() => { el.style.transition = 'transform 0.4s cubic-bezier(0.2, 1, 0.3, 1)'; el.style.transform = 'translateX(0)'; }, 10);
-        }, 300);
-    }
-    function viewArc(i) { arcFocus = { tasks: db.archive[i].tasks, d: db.archive[i].d, originalIdx: i }; render(); }
-    function delArch(e, i) { e.stopPropagation(); if(confirm("Delete this card?")) { db.archive.splice(i, 1); save(); render(); } }
-    function tgl(i) { if(arcFocus)return; let v=['today','next','someday','archive'][cur]; db[v][i].s=(db[v][i].s+1)%3; save(); render(); }
-    function upd(i,v) { if(arcFocus)return; db[['today','next','someday','archive'][cur]][i].t=v; render(); save(); }
-    function fin() {
-        if(!confirm("Archive today?")) return;
-        db.archive.push({d: getShortDate(new Date()), tasks: JSON.parse(JSON.stringify(db.today))});
-        db.today = Array(10).fill().map(()=>({t:"", s:0})); save(); render();
-    }
-    let sX = 0;
-    document.addEventListener('touchstart', e => sX = e.touches[0].clientX);
-    document.addEventListener('touchend', e => {
-        let diff = e.changedTouches[0].clientX - sX;
-        if(Math.abs(diff) > 70 && !dragEl) { if(arcFocus){ arcFocus=null; render(); return; } jump(-Math.sign(diff)); }
-    });
-
-    checkDateRollover(); checkBackupHealth(); render();
-</script>
-</body>
-</html>
+\f0\fs24 \cf0 <!DOCTYPE html>\
+<html lang="en">\
+<head>\
+    <meta charset="UTF-8">\
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">\
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Nanum+Pen+Script&display=swap" rel="stylesheet">\
+    <style>\
+        :root \{ \
+            --rule: rgba(0,0,0,0.12); \
+            --text: #1a1a1a; \
+            --priority: #991b1b; \
+            --line: 52px;\
+            --paper-today: #ffffff;\
+            --paper-next: #efdfb4;     \
+            --paper-someday: #c7b399;  \
+            --paper-archive: #c7b399; \
+        \}\
+        \
+        body \{ \
+            margin: 0; padding: 0; background: #1a1a1a; \
+            font-family: 'Nanum Pen Script', cursive; \
+            overflow: hidden; height: 100vh; width: 100vw;\
+            -webkit-tap-highlight-color: transparent;\
+        \}\
+\
+        #vp \{ width: 100%; height: 100vh; position: relative; overflow: hidden; \}\
+        \
+        .card \{ \
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0; \
+            transition: transform 0.4s cubic-bezier(0.2, 1, 0.3, 1); \
+        \}\
+\
+        .c-today \{ background: var(--paper-today); \}\
+        .c-next \{ background: var(--paper-next); \}\
+        .c-someday \{ background: var(--paper-someday); \}\
+        .c-archive \{ background: var(--paper-archive); \}\
+\
+        .hdr \{ \
+            height: 100px; display: flex; align-items: flex-start; justify-content: space-between;\
+            padding: 20px 20px 0 20px; box-sizing: border-box; \
+        \}\
+        \
+        .hdr b \{ \
+            font-family: 'Cormorant Garamond', serif;\
+            font-size: 26px; font-weight: 500; letter-spacing: 2px; \
+            text-transform: uppercase; color: #000;\
+        \}\
+        \
+        .hdr span \{ font-size: 22px; color: rgba(0,0,0,0.5); text-align: right; padding-top: 2px; \}\
+\
+        .drop-indicator \{\
+            height: 1.5px;\
+            background: #666;\
+            margin: 0 15px 0 48px;\
+            position: absolute;\
+            width: calc(100% - 63px);\
+            pointer-events: none;\
+            display: none;\
+            z-index: 50;\
+            opacity: 0.8;\
+        \}\
+        .drop-indicator.priority \{ background: var(--priority); height: 1.2px; \}\
+\
+        li.dragging \{ \
+            opacity: 0.8; \
+            transform: scale(1.02); \
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1); \
+            background: rgba(255,255,255,0.4); \
+            z-index: 100;\
+        \}\
+\
+        .arch-item \{ padding: 20px 15px; border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: center; \}\
+        .arch-date \{ font-size: 28px; line-height: 1; flex: 1; \}\
+        .arch-meta \{ display: flex; align-items: center; gap: 15px; font-family: sans-serif; font-size: 12px; color: rgba(0,0,0,0.4); \}\
+\
+        #toast \{\
+            position: fixed; top: -100px; left: 50%; transform: translateX(-50%);\
+            width: 90%; max-width: 400px; background: #333; color: #fff;\
+            padding: 12px 20px; border-radius: 12px; z-index: 1000;\
+            display: flex; align-items: center; justify-content: space-between;\
+            font-family: sans-serif; font-size: 13px; box-shadow: 0 10px 25px rgba(0,0,0,0.3);\
+            transition: top 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);\
+        \}\
+        #toast.show \{ top: 20px; \}\
+        .t-btn \{ background: #fff; color: #000; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; text-transform: uppercase; \}\
+\
+        .settings-trigger, .dots, .hndl, .btn-c, .fin-btn, .m-item \{ transition: opacity 0.1s, transform 0.1s; cursor: pointer; outline: none; \}\
+        .settings-trigger:active, .dots:active, .hndl:active, .btn-c:active, .fin-btn:active, .m-item:active \{ opacity: 0.4; transform: scale(0.98); \}\
+\
+        .settings-trigger \{ width: 24px; height: 24px; fill: rgba(0,0,0,0.6); margin-top: 4px; \}\
+\
+        ul \{ list-style: none; margin: 0; padding: 0; position: relative; \}\
+        li \{ \
+            height: var(--line); display: flex; align-items: center; \
+            padding: 0 10px 0 12px; position: relative; background: transparent; touch-action: none; \
+            box-sizing: border-box;\
+        \}\
+        li::after \{ content: ""; position: absolute; bottom: 0; left: 48px; right: 15px; height: 1px; background-color: var(--rule); \}\
+\
+        .btn-c \{ width: 18px; height: 18px; border: 1.2px solid #000; border-radius: 50%; margin-right: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 2; background: transparent; \}\
+        .today-list li:nth-child(-n+3) .btn-c \{ border-color: var(--priority); border-width: 2px; \}\
+        \
+        .dot-in \{ width: 10px; height: 10px; background: #000; border-radius: 50%; \}\
+        .del-arrow \{ width: 100%; height: 100%; color: inherit; \}\
+\
+        input \{ \
+            flex: 1; border: none; font-size: 24px; outline: none; \
+            background: transparent; color: var(--text); z-index: 2; \
+            font-family: 'Nanum Pen Script', cursive; min-width: 0; padding-top: 4px;\
+        \}\
+        .done \{ text-decoration: line-through; color: rgba(0,0,0,0.45); opacity: 0.7; \}\
+\
+        .ctrls \{ display: flex; align-items: center; gap: 4px; color: rgba(0,0,0,0.3); z-index: 2; flex-shrink: 0; margin-left: 5px; font-family: sans-serif; \}\
+        .dots \{ padding: 4px; font-size: 18px; line-height: 1; \}\
+        .hndl \{ padding: 4px; font-size: 16px; \}\
+\
+        .fin-btn \{\
+            padding: 8px 18px; background: #fff; color: #000; \
+            border: 1px solid rgba(0,0,0,0.4); border-radius: 6px; \
+            font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 15px; \
+            letter-spacing: 1.5px; text-transform: uppercase;\
+        \}\
+\
+        #menu, #settings-menu \{ \
+            position: fixed; bottom: -100%; left: 0; width: 100%; background: #fff; \
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-radius: 24px 24px 0 0; \
+            transition: 0.3s cubic-bezier(0.2, 1, 0.3, 1); z-index: 100; padding-bottom: 40px; font-family: sans-serif; \
+        \}\
+        #menu.open, #settings-menu.open \{ bottom: 0; \}\
+        .m-item \{ padding: 20px; text-align: center; border-bottom: 1px solid #f5f5f5; color: #111; font-size: 16px; font-weight: 600; \}\
+        #ov \{ position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 90; \}\
+\
+        .del-card \{ color: #ef4444; font-size: 22px; padding: 0 10px; opacity: 0.5; \}\
+    </style>\
+</head>\
+<body>\
+    <div id="toast"><span>Time for a weekly backup?</span><button class="t-btn" onclick="exportData(true)">Backup</button></div>\
+    <div id="vp"><div id="card" class="card"></div></div>\
+    <div id="ov" onclick="closeAll()"></div>\
+    <div id="drop-indicator" class="drop-indicator"></div>\
+    \
+    <div id="menu">\
+        <div id="m-context-title" style="padding:15px; font-size:12px; color:#999; text-transform:uppercase; text-align:center; border-bottom:1px solid #eee;">Options</div>\
+        <div id="m-options-container"></div>\
+        <div class="m-item" style="opacity:0.5; font-weight:400;" onclick="closeAll()">Cancel</div>\
+    </div>\
+\
+    <div id="settings-menu">\
+        <div class="m-item" onclick="exportMarkdown()">Export History (Markdown)</div>\
+        <div class="m-item" onclick="exportData()">Backup System (JSON)</div>\
+        <div class="m-item" onclick="importData()">Restore System (JSON)</div>\
+        <div class="m-item" style="opacity:0.5; font-weight:400;" onclick="closeAll()">Close</div>\
+    </div>\
+\
+    <input type="file" id="fileInput" style="display:none" accept=".json">\
+\
+<script>\
+    let cur = 0, sel = null, arcFocus = null;\
+    const STORAGE_KEY = 'analog_db';\
+\
+    function migrateData() \{\
+        const legacyKeys = ['v36', 'v35', 'v34', 'v33', 'v32', 'v31'];\
+        legacyKeys.forEach(k => \{\
+            const todayData = localStorage.getItem(k + '_t');\
+            if (todayData && !localStorage.getItem(STORAGE_KEY + '_t')) \{\
+                localStorage.setItem(STORAGE_KEY + '_t', todayData);\
+                localStorage.setItem(STORAGE_KEY + '_n', localStorage.getItem(k + '_n'));\
+                localStorage.setItem(STORAGE_KEY + '_s', localStorage.getItem(k + '_s'));\
+                localStorage.setItem(STORAGE_KEY + '_a', localStorage.getItem(k + '_a'));\
+                localStorage.setItem(STORAGE_KEY + '_lastDate', localStorage.getItem(k + '_lastDate'));\
+                localStorage.setItem(STORAGE_KEY + '_lastBackup', localStorage.getItem(k + '_lastBackup'));\
+            \}\
+        \});\
+    \}\
+\
+    migrateData();\
+\
+    let db = \{\
+        today: JSON.parse(localStorage.getItem(STORAGE_KEY+'_t')) || Array(10).fill().map(()=>(\{t:"", s:0\})),\
+        next: JSON.parse(localStorage.getItem(STORAGE_KEY+'_n')) || Array(10).fill().map(()=>(\{t:"", s:0\})),\
+        someday: JSON.parse(localStorage.getItem(STORAGE_KEY+'_s')) || Array(10).fill().map(()=>(\{t:"", s:0\})),\
+        archive: JSON.parse(localStorage.getItem(STORAGE_KEY+'_a')) || [],\
+        lastActiveDate: localStorage.getItem(STORAGE_KEY+'_lastDate') || "",\
+        lastBackup: localStorage.getItem(STORAGE_KEY+'_lastBackup') || Date.now()\
+    \};\
+\
+    function save() \{ \
+        localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today)); \
+        localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next)); \
+        localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday)); \
+        localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive)); \
+        localStorage.setItem(STORAGE_KEY+'_lastDate', db.lastActiveDate);\
+        localStorage.setItem(STORAGE_KEY+'_lastBackup', db.lastBackup);\
+    \}\
+\
+    function getShortDate(dObj) \{ return `$\{dObj.toLocaleDateString('en-US', \{ month: 'short' \})\} $\{dObj.getDate()\}, $\{dObj.getFullYear()\}`; \}\
+\
+    function render() \{\
+        const views = ['today', 'next', 'someday', 'archive'];\
+        const classMap = ['c-today', 'c-next', 'c-someday', 'c-archive'];\
+        const v = views[cur];\
+        const el = document.getElementById('card');\
+        el.className = 'card ' + (arcFocus ? 'c-archive' : classMap[cur]);\
+\
+        if(cur === 3 && !arcFocus) \{\
+            const gearSVG = `<svg class="settings-trigger" onclick="openSettings()" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;\
+            el.innerHTML = `<div class="hdr"><b>Archive</b>$\{gearSVG\}</div><div id="arch-list" style="overflow-y:auto; height:calc(100% - 100px)"></div>`;\
+            const list = document.getElementById('arch-list');\
+            db.archive.slice().reverse().forEach((e, originalIdx) => \{\
+                let realIdx = db.archive.length - 1 - originalIdx;\
+                let r = document.createElement('div'); r.className='arch-item';\
+                r.innerHTML = `<div class="arch-date" onclick="viewArc($\{realIdx\})">$\{e.d\}</div>\
+                               <div class="arch-meta"><span>$\{e.tasks.filter(x=>x.s==1).length\} DONE</span><div class="del-card" onclick="delArch(event, $\{realIdx\})">\'d7</div></div>`;\
+                list.appendChild(r);\
+            \});\
+            return;\
+        \}\
+\
+        const data = arcFocus ? arcFocus.tasks : db[v];\
+        const title = arcFocus ? 'History' : v.charAt(0).toUpperCase() + v.slice(1);\
+        let subtitle = arcFocus ? arcFocus.d : (cur === 0 ? getShortDate(new Date()) : (cur === 1 ? "Priority" : "Ideas"));\
+\
+        el.innerHTML = `<div class="hdr"><b>$\{title\}</b><span>$\{subtitle\}</span></div><ul id="list" class="$\{cur===0?'today-list':''\}"></ul><div id="btn-container"></div>`;\
+        \
+        updateTodayButton();\
+\
+        const list = document.getElementById('list');\
+        const delSVG = `<svg class="del-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="12" x2="17" y2="12"></line><polyline points="12 7 17 12 12 17"></polyline></svg>`;\
+        data.forEach((item, i) => \{\
+            let li = document.createElement('li'); li.dataset.idx = i;\
+            let icon = item.s==1 ? '<div class="dot-in"></div>' : (item.s==2 ? delSVG : '');\
+            li.innerHTML = `<div class="btn-c" onclick="tgl($\{i\})">$\{icon\}</div>\
+                <input type="text" value="$\{item.t\}" oninput="upd($\{i\},this.value)" class="$\{item.s==1?'done':''\}">\
+                <div class="ctrls"><span class="dots" onclick="openM($\{i\})">\uc0\u8942 </span><span class="hndl" onpointerdown="startDrag(event, $\{i\})">\u10303 </span></div>`;\
+            list.appendChild(li);\
+        \});\
+    \}\
+\
+    function updateTodayButton() \{\
+        const container = document.getElementById('btn-container');\
+        if(!container || cur !== 0 || arcFocus) \{ \
+            if(container) container.innerHTML = ""; \
+            return; \
+        \}\
+        const hasTasks = db.today.some(x => x.t.trim() !== "");\
+        const btnText = hasTasks ? "Finish Day" : "Review Yesterday";\
+        const btnFunc = hasTasks ? "fin()" : "viewLastArc()";\
+        container.innerHTML = `<div style="padding:10px 25px; text-align:center;"><button class="fin-btn" onclick="$\{btnFunc\}">$\{btnText\}</button></div>`;\
+    \}\
+\
+    let dragEl = null;\
+    function startDrag(e, i) \{ \
+        if(arcFocus) return; \
+        dragEl = e.target.closest('li'); \
+        dragEl.classList.add('dragging');\
+        dragEl.setPointerCapture(e.pointerId); \
+    \}\
+    document.addEventListener('pointermove', e => \{\
+        if(!dragEl) return;\
+        const list = document.getElementById('list');\
+        const indicator = document.getElementById('drop-indicator');\
+        if (cur === 0) indicator.classList.add('priority');\
+        else indicator.classList.remove('priority');\
+        const items = [...list.querySelectorAll('li:not(.dragging)')];\
+        let next = items.find(s => e.clientY <= s.getBoundingClientRect().top + s.offsetHeight/2);\
+        indicator.style.display = 'block';\
+        if (next) indicator.style.top = next.getBoundingClientRect().top + 'px';\
+        else if (items.length > 0) indicator.style.top = items[items.length - 1].getBoundingClientRect().bottom + 'px';\
+    \});\
+    document.addEventListener('pointerup', e => \{\
+        if(!dragEl) return;\
+        const list = document.getElementById('list');\
+        const indicator = document.getElementById('drop-indicator');\
+        const next = [...list.querySelectorAll('li:not(.dragging)')].find(s => e.clientY <= s.getBoundingClientRect().top + s.offsetHeight/2);\
+        list.insertBefore(dragEl, next);\
+        dragEl.classList.remove('dragging');\
+        indicator.style.display = 'none';\
+        let v = ['today','next','someday','archive'][cur];\
+        db[v] = [...list.querySelectorAll('li')].map(li => db[v][li.dataset.idx]);\
+        dragEl = null; save(); render();\
+    \});\
+\
+    function viewLastArc() \{\
+        if(db.archive.length > 0) viewArc(db.archive.length - 1);\
+        else alert("No history found.");\
+    \}\
+\
+    function openM(i) \{ \
+        sel=i; const container = document.getElementById('m-options-container'); container.innerHTML = '';\
+        const currentView = ['today', 'next', 'someday', 'archive'][cur];\
+        const addOption = (label, action, color) => \{\
+            const div = document.createElement('div'); div.className = 'm-item';\
+            if(color) div.style.color = color; div.innerText = label; div.onclick = () => mAct(action);\
+            container.appendChild(div);\
+        \};\
+        if(arcFocus) \{\
+            document.getElementById('m-context-title').innerText = "Review & Move";\
+            addOption("Migrate to Today", "today"); addOption("Migrate to Next", "next"); addOption("Migrate to Someday", "someday");\
+        \} else \{\
+            document.getElementById('m-context-title').innerText = "Move Task";\
+            if(currentView !== 'today') addOption("Move to Today", "today");\
+            if(currentView !== 'next') addOption("Move to Next", "next");\
+            if(currentView !== 'someday') addOption("Move to Someday", "someday");\
+            addOption("Delete Task", "del", "red");\
+        \}\
+        document.getElementById('menu').classList.add('open'); document.getElementById('ov').style.display='block'; \
+    \}\
+\
+    function mAct(a) \{ \
+        let src = arcFocus ? arcFocus.tasks : db[['today', 'next', 'someday', 'archive'][cur]];\
+        let taskCopy = \{...src[sel]\};\
+\
+        if (a === 'del') \{ \
+            src[sel] = \{t:"", s:0\}; \
+        \} else \{\
+            let ti = db[a].findIndex(x => x.t.trim() === "");\
+            let targetStatus = arcFocus ? 2 : taskCopy.s;\
+            let newTask = \{t: taskCopy.t, s: targetStatus\};\
+            if(ti !== -1) db[a][ti] = newTask; else db[a].push(newTask);\
+            if(arcFocus) \{ src[sel].s = 2; \} else \{ src[sel] = \{t:"", s:0\}; \}\
+        \}\
+        save(); render(); closeAll();\
+    \}\
+\
+    function exportData(fromToast = false) \{\
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));\
+        const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "analog_backup_" + new Date().toISOString().slice(0,10) + ".json"); a.click();\
+        db.lastBackup = Date.now(); save();\
+        if(fromToast) document.getElementById('toast').classList.remove('show');\
+        closeAll();\
+    \}\
+\
+    function exportMarkdown() \{\
+        let md = `# Analog Card History\\nExported: $\{new Date().toLocaleDateString()\}\\n\\n`;\
+        const formatSection = (t, s, tasks) => \{\
+            let sec = `## $\{t\} ($\{s\})\\n`;\
+            tasks.forEach(task => \{ if(task.t.trim()) sec += `$\{task.s===1?'- [x]':(task.s===2?'- [>]':'- [ ]')\} $\{task.t\}\\n`; \});\
+            return sec + "\\n";\
+        \};\
+        md += formatSection("Today", getShortDate(new Date()), db.today);\
+        md += formatSection("Next", "Priority", db.next);\
+        md += formatSection("Someday", "Ideas", db.someday);\
+        md += "--- \\n# Archive\\n\\n";\
+        db.archive.slice().reverse().forEach(e => \{ md += formatSection("Card", e.d, e.tasks); \});\
+        const blob = new Blob([md], \{type: 'text/markdown'\});\
+        const a = document.createElement('a'); a.setAttribute("href", URL.createObjectURL(blob)); a.setAttribute("download", `analog_history_$\{new Date().toISOString().slice(0,10)\}.md`); a.click(); closeAll();\
+    \}\
+\
+    function checkDateRollover() \{\
+        const todayStr = getShortDate(new Date());\
+        if (db.lastActiveDate !== "" && db.lastActiveDate !== todayStr) \{\
+            if (db.today.some(x => x.t.trim() !== "")) db.archive.push(\{d: db.lastActiveDate, tasks: JSON.parse(JSON.stringify(db.today))\});\
+            db.today = Array(10).fill().map(()=>(\{t:"", s:0\}));\
+        \}\
+        db.lastActiveDate = todayStr; save();\
+    \}\
+\
+    function checkBackupHealth() \{ if (Date.now() - db.lastBackup > 7*24*60*60*1000) document.getElementById('toast').classList.add('show'); \}\
+    function openSettings() \{ document.getElementById('settings-menu').classList.add('open'); document.getElementById('ov').style.display='block'; \}\
+    function closeAll() \{ document.getElementById('menu').classList.remove('open'); document.getElementById('settings-menu').classList.remove('open'); document.getElementById('ov').style.display='none'; \}\
+    function importData() \{ document.getElementById('fileInput').click(); \}\
+    document.getElementById('fileInput').onchange = e => \{\
+        const reader = new FileReader();\
+        reader.onload = ev => \{ try \{ db = JSON.parse(ev.target.result); save(); render(); closeAll(); \} catch(e) \{ alert("Invalid file."); \} \};\
+        reader.readAsText(e.target.files[0]);\
+    \};\
+    function jump(dir) \{\
+        let el = document.getElementById('card'); el.style.transform = `translateX($\{-dir * 100\}%)`;\
+        setTimeout(() => \{\
+            cur = (cur + dir + 4) % 4; arcFocus = null;\
+            el.style.transition = 'none'; el.style.transform = `translateX($\{dir * 100\}%)`;\
+            render();\
+            setTimeout(() => \{ el.style.transition = 'transform 0.4s cubic-bezier(0.2, 1, 0.3, 1)'; el.style.transform = 'translateX(0)'; \}, 10);\
+        \}, 300);\
+    \}\
+    function viewArc(i) \{ arcFocus = \{ tasks: db.archive[i].tasks, d: db.archive[i].d, originalIdx: i \}; render(); \}\
+    function delArch(e, i) \{ e.stopPropagation(); if(confirm("Delete this card?")) \{ db.archive.splice(i, 1); save(); render(); \} \}\
+    function tgl(i) \{ if(arcFocus)return; let v=['today','next','someday','archive'][cur]; db[v][i].s=(db[v][i].s+1)%3; save(); render(); \}\
+    function upd(i,v) \{ if(arcFocus)return; db[['today','next','someday','archive'][cur]][i].t=v; save(); if(cur === 0) updateTodayButton(); \}\
+    function fin() \{\
+        if(!confirm("Archive today?")) return;\
+        db.archive.push(\{d: getShortDate(new Date()), tasks: JSON.parse(JSON.stringify(db.today))\});\
+        db.today = Array(10).fill().map(()=>(\{t:"", s:0\})); save(); render();\
+    \}\
+    let sX = 0;\
+    document.addEventListener('touchstart', e => sX = e.touches[0].clientX);\
+    document.addEventListener('touchend', e => \{\
+        let diff = e.changedTouches[0].clientX - sX;\
+        if(Math.abs(diff) > 70 && !dragEl) \{ if(arcFocus)\{ arcFocus=null; render(); return; \} jump(-Math.sign(diff)); \}\
+    \});\
+\
+    checkDateRollover(); checkBackupHealth(); render();\
+</script>\
+</body>\
+</html>}
