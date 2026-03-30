@@ -44,7 +44,6 @@
             background: rgba(255,255,255,0.4); z-index: 100; 
         }
 
-        /* 4-State Button Styling */
         .btn-c { 
             width: 18px; height: 18px; border: 1.2px solid #000; border-radius: 50%; 
             margin-right: 12px; display: flex; align-items: center; justify-content: center; 
@@ -52,9 +51,7 @@
         }
         .today-list li:nth-child(-n+3) .btn-c { border-color: var(--priority); border-width: 2px; }
         
-        /* State 1: In Progress (Half Fill Left) */
         .btn-c.s-progress { background: linear-gradient(90deg, #000 50%, transparent 50%); }
-        /* State 2: Finished (Solid Black) */
         .btn-c.s-done { background: #000; border-color: #000; }
         
         .del-arrow { width: 100%; height: 100%; color: inherit; }
@@ -71,6 +68,7 @@
         .hndl { font-size: 20px; }
 
         .fin-btn { padding: 8px 18px; background: #fff; color: #000; border: 1px solid rgba(0,0,0,0.4); border-radius: 6px; font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
+        .undo-btn { font-family: 'Cormorant Garamond', serif; font-size: 12px; color: #991b1b; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; margin-top: 5px; display: block; border: 1px solid #991b1b; padding: 2px 6px; border-radius: 4px; }
         
         #menu, #settings-menu { position: fixed; bottom: -100%; left: 0; width: 100%; background: #fff; box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-radius: 24px 24px 0 0; transition: 0.3s cubic-bezier(0.2, 1, 0.3, 1); z-index: 100; padding-bottom: 40px; font-family: sans-serif; }
         #menu.open, #settings-menu.open { bottom: 0; }
@@ -124,18 +122,15 @@
 
     function checkDayReset() {
         const todayStr = new Date().toDateString();
-        if (db.lastActiveDate && db.lastActiveDate !== todayStr) {
-            // Auto-archive if opening on a new day
-            fin(true);
-        }
-        db.lastActiveDate = todayStr;
-        save();
+        if (!db.lastActiveDate) { db.lastActiveDate = todayStr; save(); return; }
+        if (db.lastActiveDate !== todayStr) { fin(true); }
     }
 
     function render() {
         const views = ['today', 'next', 'someday', 'archive'];
         const v = views[cur];
         const el = document.getElementById('card');
+        const todayDate = getShortDate(new Date());
         el.className = 'card ' + (arcFocus ? 'c-archive' : 'c-' + v);
 
         if(cur === 3 && !arcFocus) {
@@ -152,9 +147,11 @@
 
         const data = arcFocus ? arcFocus.tasks : db[v];
         const title = arcFocus ? 'History' : v.charAt(0).toUpperCase() + v.slice(1);
-        let sub = arcFocus ? arcFocus.d : (cur === 0 ? getShortDate(new Date()) : (cur === 1 ? "Priority" : "Ideas"));
+        let sub = arcFocus ? arcFocus.d : (cur === 0 ? todayDate : (cur === 1 ? "Priority" : "Ideas"));
+        
+        let undoHtml = (arcFocus && arcFocus.d === todayDate) ? `<div class="undo-btn" onclick="undoFin()">Undo Archive</div>` : "";
 
-        el.innerHTML = `<div class="hdr"><b>${title}</b><span>${sub}</span></div><ul id="list" class="${cur===0?'today-list':''}"></ul><div id="btn-container"></div>`;
+        el.innerHTML = `<div class="hdr"><b>${title}</b><span>${sub}${undoHtml}</span></div><ul id="list" class="${cur===0?'today-list':''}"></ul><div id="btn-container"></div>`;
         updateTodayButton();
 
         const list = document.getElementById('list');
@@ -235,7 +232,7 @@
         if (a === 'del') { src[sel] = {t:"", s:0}; } 
         else {
             let ti = db[a].findIndex(x => x.t.trim() === "");
-            let newTask = {t: src[sel].t, s: arcFocus ? 0 : src[sel].s};
+            let newTask = {t: src[sel].t, s: 0}; 
             if(ti !== -1) db[a][ti] = newTask; else db[a].push(newTask);
             if(arcFocus) src[sel].s = 3; else src[sel] = {t:"", s:0};
         }
@@ -244,23 +241,22 @@
 
     function fin(isAuto = false) { 
         if(!isAuto && !confirm("Archive today?")) return; 
-        
-        // 1. Archive current Today card as is
-        db.archive.push({d: db.lastActiveDate || getShortDate(new Date()), tasks: JSON.parse(JSON.stringify(db.today))}); 
-        
-        // 2. Identify tasks with ARROW (s=3) to migrate
-        const migratedTasks = db.today.filter(t => t.s === 3 && t.t.trim() !== "");
-        
-        // 3. Reset Today
+        const archiveDate = db.lastActiveDate || getShortDate(new Date());
+        db.archive.push({d: archiveDate, tasks: JSON.parse(JSON.stringify(db.today))}); 
+        const migrated = db.today.filter(t => t.s === 3 && t.t.trim() !== "");
         db.today = Array(10).fill().map(()=>({t:"", s:0}));
-        
-        // 4. Populate new Today with migrated tasks (Resetting their state to Open)
-        migratedTasks.forEach((t, i) => {
-            if(i < 10) db.today[i] = { t: t.t, s: 0 };
-        });
-
+        migrated.forEach((t, i) => { if(i < 10) db.today[i] = { t: t.t, s: 0 }; });
         db.lastActiveDate = new Date().toDateString();
-        save(); render(); 
+        save(); if(!isAuto) render(); 
+    }
+
+    function undoFin() {
+        if(!confirm("Revert this archive back to your active Today card?")) return;
+        let last = db.archive.pop();
+        db.today = last.tasks;
+        arcFocus = null;
+        cur = 0; // Jump back to today view
+        save(); render();
     }
 
     function openSettings() { document.getElementById('settings-menu').classList.add('open'); document.getElementById('ov').style.display='block'; }
@@ -270,25 +266,16 @@
     function exportMarkdown() {
         const now = new Date();
         const exportDate = `${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
-        let startDate = "N/A", endDate = "N/A", totalDays = db.archive.length;
-        if (totalDays > 0) { startDate = db.archive[0].d; endDate = db.archive[totalDays - 1].d; }
-
-        let md = "---\n";
-        md += "title: Analog Digital OS Archive\n";
-        md += "description: Task history with state-tracking (Open, In-Progress, Done, Migrated).\n";
-        md += `export_date: "${exportDate}"\n`;
-        md += `date_span: "${startDate} to ${endDate}"\n`;
-        md += `total_days_logged: ${totalDays}\n`;
-        md += "---\n\n# Archive History\n\n";
-        
+        let md = "---\ntitle: Analog Digital OS Archive\n";
+        md += `export_date: "${exportDate}"\n---\n\n# Archive History\n\n`;
         db.archive.slice().reverse().forEach(day => {
             md += `## ${day.d}\n`;
             day.tasks.forEach(t => {
                 if(t.t.trim() !== "") {
                     let prefix = "[ ]";
-                    if(t.s === 1) prefix = "[/]"; // Progress
-                    if(t.s === 2) prefix = "[x]"; // Done
-                    if(t.s === 3) prefix = "[>]"; // Migrated
+                    if(t.s === 1) prefix = "[/]"; 
+                    if(t.s === 2) prefix = "[x]"; 
+                    if(t.s === 3) prefix = "[>]"; 
                     md += `${prefix} ${t.t}\n`;
                 }
             });
