@@ -66,16 +66,16 @@
 
         /* Tally/Dot Styling */
         .tally-hit-zone { 
-            display: flex; align-items: center; gap: 5px; height: 100%; 
+            display: flex; align-items: center; gap: 6px; height: 100%; 
             padding: 0 10px 0 15px; cursor: pointer; z-index: 5;
         }
         .dot { 
-            width: 6px; height: 6px; border-radius: 50%; 
-            border: 1px solid rgba(0,0,0,0.15); transition: background 0.1s;
+            width: 7px; height: 7px; border-radius: 50%; 
+            border: 1.2px solid rgba(0,0,0,0.2); transition: all 0.1s;
         }
         .dot.active { 
             background: #000; border-color: #000; 
-            box-shadow: 0.5px 0.5px 1px rgba(0,0,0,0.3);
+            transform: scale(1.1);
         }
 
         .ctrls { display: flex; align-items: center; gap: 8px; color: rgba(0,0,0,0.3); z-index: 2; flex-shrink: 0; font-family: sans-serif; }
@@ -203,9 +203,10 @@
             if (item.s === 2) btnClass += " s-done";
             let icon = item.s === 3 ? arrowSVG : '';
             
-            const match = item.t.match(/\[(\d+)\]/);
-            const goal = match ? parseInt(match[1]) : 0;
-            const displayTask = item.t.replace(/\[\d+\]/, '').trim();
+            // Syntax Detection
+            const tagMatch = item.t.match(/\[(\d+)\]/);
+            const goal = tagMatch ? parseInt(tagMatch[1]) : 0;
+            const cleanText = item.t.replace(/\[\d+\]/g, '').trim();
             const count = item.c || 0;
             
             let dotsHTML = '';
@@ -219,7 +220,7 @@
 
             li.innerHTML = `<div class="${btnClass}" onclick="tgl(${i})">${icon}</div>
                             <div class="inp-wrap">
-                                <input type="text" value="${goal > 0 ? displayTask : item.t}" oninput="upd(${i},this.value)" onblur="render()" class="${item.s==2?'done':''}">
+                                <input type="text" value="${cleanText}" oninput="upd(${i},this.value)" class="${item.s==2?'done':''}">
                                 ${dotsHTML}
                             </div>
                             <div class="ctrls"><span class="dots" onclick="openM(${i})">⋮</span><span class="hndl" onpointerdown="startDrag(event, ${i})">⠿</span></div>`;
@@ -234,13 +235,17 @@
         const match = item.t.match(/\[(\d+)\]/);
         const goal = match ? parseInt(match[1]) : 0;
         
-        // Simple increment and wrap around
         item.c = (item.c || 0) + 1;
         if(item.c > goal) item.c = 0;
         
-        // Auto-complete logic
-        if(item.c === goal && goal > 0) item.s = 2;
-        else if(item.s === 2 && item.c < goal) item.s = 0;
+        // Auto-status updates
+        if(item.c === 0) {
+            item.s = 0; // Empty
+        } else if(item.c === goal) {
+            item.s = 2; // Done
+        } else {
+            item.s = 1; // In Progress
+        }
         
         save(); render();
     }
@@ -255,9 +260,9 @@
     function upd(i,v) { 
         if(arcFocus) return; 
         let key = ['today','next','someday'][cur];
-        // Extract existing tag or empty
-        const match = db[key][i].t.match(/\[\d+\]/);
-        const tag = match ? match[0] : "";
+        // Ensure we preserve the tag when editing text
+        const tagMatch = db[key][i].t.match(/\[\d+\]/);
+        const tag = tagMatch ? tagMatch[0] : "";
         db[key][i].t = tag ? `${v} ${tag}` : v;
         save(); 
         if(cur === 0) updateTodayButton(); 
@@ -287,7 +292,24 @@
         dragEl = null; save(); render();
     });
 
-    function tgl(i) { if(arcFocus) return; let v = ['today','next','someday','archive'][cur]; db[v][i].s = (db[v][i].s + 1) % 4; save(); render(); }
+    function tgl(i) { 
+        if(arcFocus) return; 
+        let v = ['today','next','someday','archive'][cur];
+        let item = db[v][i];
+        item.s = (item.s + 1) % 4; 
+        
+        // Sync dots to status if applicable
+        const tagMatch = item.t.match(/\[(\d+)\]/);
+        if(tagMatch) {
+            const goal = parseInt(tagMatch[1]);
+            if(item.s === 2) item.c = goal;
+            else if(item.s === 0) item.c = 0;
+            else if(item.s === 1 && item.c === 0) item.c = 1;
+        }
+        
+        save(); render(); 
+    }
+
     function viewArc(i) { arcFocus = { tasks: db.archive[i].tasks, d: db.archive[i].d, idx: i }; render(); }
     function delArch(e, i) { e.stopPropagation(); if(confirm("Delete card?")) { db.archive.splice(i, 1); save(); render(); } }
     function viewLastArc() { if(db.archive.length > 0) viewArc(db.archive.length - 1); else alert("No history"); }
