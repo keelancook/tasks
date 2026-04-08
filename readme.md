@@ -2,15 +2,17 @@
 
 **Accounting for a Life Well-Spent.**
 
-The Ledger is a minimal, local-first task management system designed as a digital evolution of analog index-card workflows. It was "vibe-coded" primarily for my personal needs as a professor and software engineer, seeking to bridge the gap between the tactile clarity of paper and the convenience of a mobile device.
+The Ledger is a minimal, local-first task management system designed as a digital evolution of analog index-card workflows. It was vibe-coded primarily for my personal needs as a professor, seeking to bridge the gap between the tactile clarity of paper and the convenience of a mobile device.
 
-Unlike traditional productivity tools that treat tasks as a never-ending stream, The Ledger treats them as an account of your responsibilities. It is built to encourage stewardship of time rather than just "getting things done."
+It was also a test drive of using Gemini to design a functional web app. Basically everything in this repo was generated that way as a test and to learn how to do it. Ironically, I do use this every day now to track my tasks, and I've been pleased with the outcome. 
+
+Unlike traditional productivity tools that treat tasks as a never-ending stream, The Ledger treats them as an account of your responsibilities. It is built to encourage stewardship of time rather than just getting things done.
 
 ## The Philosophy
 
-The mechanics of The Ledger are intentionally built with "productive friction." It reproduces the limitations of physical systems like the [Ugmonk Analog](https://ugmonk.com/pages/analog) and traditional **Dash-Plus** notation. 
+The mechanics of The Ledger are intentionally built with productive friction. It reproduces the limitations of physical systems like the [Ugmonk Analog](https://ugmonk.com/pages/analog) and traditional **Dash-Plus** notation. 
 
-By limiting daily space and requiring a manual "reconciliation" at the end of each day, the app forces you to audit your progress and make intentional decisions about how to spend your most finite capital: time.
+By limiting daily space and requiring a manual reconciliation at the end of each day, the app forces you to audit your progress and make intentional decisions about how to spend your most finite capital: time.
 
 ## Key Features
 
@@ -35,8 +37,8 @@ The Ledger is a **Progressive Web App (PWA)** built with Node.js, HTML, CSS, and
 
 * **Local-First:** It functions entirely client-side.
 * **Offline Capable:** Once loaded, it can be used without an internet connection.
-* **Mobile-First:** Designed with a responsive, "stacking card" UI that feels natural on a phone but scales beautifully to a desktop.
-* **Zero-Footprint:** No database setup is required. It is designed to be hosted on simple static hosting like GitHub Pages.
+* **Mobile-First:** Designed with a responsive, "stacking card" UI that feels natural on a phone but struggles on larger screens. It was opinionated toward a phone that mimics the size of an index card. You carry your phone everywhere as well. 
+* **Zero-Footprint:** No database setup is required. It is designed to be hosted on simple static hosting like GitHub Pages, as is the case here.
 
 ## How to Use
 
