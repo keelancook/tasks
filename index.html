@@ -53,9 +53,26 @@
         .ledger-del { color: var(--priority); }
         .ledger-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; display: block; }
         .settings-trigger { width: 24px; height: 24px; fill: rgba(0,0,0,0.6); margin-top: 4px; cursor: pointer; }
+
+        /* Feature 1: Month Stacks */
+        .month-stack { border-bottom: 1px solid rgba(0,0,0,0.15); }
+        .month-stack summary { list-style: none; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: rgba(0,0,0,0.55); user-select: none; }
+        .month-stack summary::-webkit-details-marker { display: none; }
+        .stack-count { font-family: sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; background: rgba(0,0,0,0.1); border-radius: 10px; padding: 2px 8px; }
+
+        /* Feature 3: Backup Banner */
+        #backup-banner { display: none; position: fixed; top: 0; left: 0; right: 0; background: #991b1b; color: #fff; font-family: sans-serif; font-size: 13px; font-weight: 600; padding: 10px 16px; z-index: 200; text-align: center; line-height: 1.4; }
+        #backup-banner.visible { display: block; }
+        #backup-banner button { margin-left: 12px; background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5); color: #fff; border-radius: 4px; padding: 3px 10px; font-size: 12px; font-weight: 700; cursor: pointer; vertical-align: middle; }
+        body.has-banner #vp { padding-top: 40px; height: calc(100vh - 40px); }
     </style>
 </head>
 <body>
+    <div id="backup-banner">
+        Backup overdue — last export was over 7 days ago.
+        <button onclick="exportData()">Export Now</button>
+    </div>
+
     <div id="vp"><div id="card" class="card"></div></div>
     <div id="ov" onclick="closeAll()"></div>
     <div id="menu">
@@ -117,6 +134,23 @@
         }
     }
 
+    // Feature 1: group archive by month
+    function groupArchiveByMonth(archive) {
+        const groups = {};
+        const order = [];
+        archive.forEach((entry, realIdx) => {
+            const parsed = new Date(entry.d);
+            const key = parsed.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            if (!groups[key]) { groups[key] = []; order.push(key); }
+            groups[key].push({ entry, realIdx });
+        });
+        return { groups, order };
+    }
+
+    function getCurrentMonthKey() {
+        return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+
     function render() {
         const views = ['today', 'next', 'someday', 'ledger'];
         const v = views[cur];
@@ -127,11 +161,34 @@
         if(cur === 3 && !arcFocus) {
             const gear = `<svg class="settings-trigger" onclick="openSettings()" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
             el.innerHTML = `<div class="hdr"><b>Ledger</b>${gear}</div><div id="ledger-list" style="overflow-y:auto; height:calc(100% - 100px)"></div>`;
-            db.archive.slice().reverse().forEach((e, i) => {
-                let realIdx = db.archive.length - 1 - i;
-                let r = document.createElement('div'); r.className='ledger-item';
-                r.innerHTML = `<div class="ledger-date" onclick="viewArc(${realIdx})">${e.d}</div><div class="ledger-ctrls"><div class="ledger-btn ledger-undo" onclick="undoFin(${realIdx})"><svg viewBox="0 0 24 24" stroke="black" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></div><div class="ledger-btn ledger-del" onclick="delArch(event, ${realIdx})"><svg viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke="red"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></div></div>`;
-                document.getElementById('ledger-list').appendChild(r);
+            const listEl = document.getElementById('ledger-list');
+
+            if (db.archive.length === 0) {
+                listEl.innerHTML = `<div style="padding:40px 20px; text-align:center; font-family:'Cormorant Garamond',serif; font-size:18px; color:rgba(0,0,0,0.35); letter-spacing:1px;">No entries yet.</div>`;
+                return;
+            }
+
+            const { groups, order } = groupArchiveByMonth(db.archive);
+            const currentMonthKey = getCurrentMonthKey();
+
+            [...order].reverse().forEach(monthKey => {
+                const entries = groups[monthKey];
+                const isCurrentMonth = (monthKey === currentMonthKey);
+                const details = document.createElement('details');
+                details.className = 'month-stack';
+                if (isCurrentMonth) details.open = true;
+
+                const summary = document.createElement('summary');
+                summary.innerHTML = `<span>${monthKey}</span><span class="stack-count">${entries.length} day${entries.length !== 1 ? 's' : ''}</span>`;
+                details.appendChild(summary);
+
+                [...entries].reverse().forEach(({ entry, realIdx }) => {
+                    const r = document.createElement('div');
+                    r.className = 'ledger-item';
+                    r.innerHTML = `<div class="ledger-date" onclick="viewArc(${realIdx})">${entry.d}</div><div class="ledger-ctrls"><div class="ledger-btn ledger-undo" onclick="undoFin(${realIdx})"><svg viewBox="0 0 24 24" stroke="black" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></div><div class="ledger-btn ledger-del" onclick="delArch(event, ${realIdx})"><svg viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke="red"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></div></div>`;
+                    details.appendChild(r);
+                });
+                listEl.appendChild(details);
             });
             return;
         }
@@ -184,21 +241,115 @@
     function viewArc(i) { arcFocus = { tasks: db.archive[i].tasks, d: db.archive[i].d, idx: i }; render(); }
     function delArch(e, i) { e.stopPropagation(); if(confirm("Delete this entry from the Ledger forever?")) { db.archive.splice(i, 1); save(); render(); } }
     function viewLastArc() { if(db.archive.length > 0) viewArc(db.archive.length - 1); else alert("No historical data found."); }
-    function openM(i) { sel=i; const container = document.getElementById('m-options-container'); container.innerHTML = ''; const addOption = (label, action) => { const div = document.createElement('div'); div.className = 'm-item'; div.innerText = label; div.onclick = () => mAct(action); container.appendChild(div); }; if(arcFocus) { addOption("Restore to Today", "today"); addOption("Move to Next", "next"); } else { const v = ['today', 'next', 'someday'][cur]; if(v !== 'today') addOption("Move to Today", "today"); if(v !== 'next') addOption("Move to Next", "next"); if(v !== 'someday') addOption("Move to Someday", "someday"); addOption("Remove Entry", "del"); } document.getElementById('menu').classList.add('open'); document.getElementById('ov').style.display='block'; }
+
+    // Feature 2: Share / Copy
+    async function shareTask(text) {
+        if (!text || !text.trim()) return;
+        if (navigator.share) {
+            try { await navigator.share({ text: text.trim() }); } catch(e) { /* cancelled */ }
+        } else {
+            try {
+                await navigator.clipboard.writeText(text.trim());
+                showToast('Copied to clipboard');
+            } catch(e) { alert('Could not copy: ' + text); }
+        }
+        closeAll();
+    }
+
+    function showToast(msg) {
+        let t = document.getElementById('toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'toast';
+            t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;font-family:sans-serif;font-size:13px;padding:8px 18px;border-radius:20px;z-index:300;pointer-events:none;transition:opacity 0.3s;';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => { t.style.opacity = '0'; }, 1800);
+    }
+
+    function openM(i) {
+        sel = i;
+        const container = document.getElementById('m-options-container');
+        container.innerHTML = '';
+        const addOption = (label, action) => {
+            const div = document.createElement('div');
+            div.className = 'm-item';
+            div.innerText = label;
+            div.onclick = () => mAct(action);
+            container.appendChild(div);
+        };
+        if(arcFocus) {
+            addOption("Restore to Today", "today");
+            addOption("Move to Next", "next");
+        } else {
+            const v = ['today', 'next', 'someday'][cur];
+            if(v !== 'today') addOption("Move to Today", "today");
+            if(v !== 'next') addOption("Move to Next", "next");
+            if(v !== 'someday') addOption("Move to Someday", "someday");
+            addOption("Remove Entry", "del");
+        }
+        // Share/Copy option
+        const src = arcFocus ? arcFocus.tasks : db[['today', 'next', 'someday'][cur]];
+        const taskText = src[i] ? src[i].t.replace(/\(\d+\)/g, '').trim() : '';
+        if (taskText) {
+            const shareDiv = document.createElement('div');
+            shareDiv.className = 'm-item';
+            shareDiv.innerText = navigator.share ? 'Share Task' : 'Copy Task';
+            shareDiv.onclick = () => shareTask(taskText);
+            container.appendChild(shareDiv);
+        }
+        document.getElementById('menu').classList.add('open');
+        document.getElementById('ov').style.display = 'block';
+    }
+
     function mAct(a) { let src = arcFocus ? arcFocus.tasks : db[['today', 'next', 'someday'][cur]]; if (a === 'del') { src[sel] = {t:"", s:0, c:0}; } else { let ti = db[a].findIndex(x => x.t.trim() === ""); let newTask = JSON.parse(JSON.stringify(src[sel])); if(ti !== -1) db[a][ti] = newTask; else db[a].push(newTask); if(arcFocus) { src[sel].s = 3; } else { src[sel] = {t:"", s:0, c:0}; } } save(); render(); closeAll(); }
     function fin() { if(!confirm("Commit today to the Ledger? Unfinished tasks will migrate forward.")) return; const todayStr = getShortDate(new Date()); db.archive.push({d: todayStr, tasks: JSON.parse(JSON.stringify(db.today))}); const migrated = db.today.filter(t => (t.s === 1 || t.s === 3) && t.t.trim() !== ""); db.today = Array(10).fill().map(()=>({t:"", s:0, c:0})); migrated.forEach((t, i) => { if(i < 10) db.today[i] = JSON.parse(JSON.stringify(t)); }); save(); render(); }
     function undoFin(idx) { if(!confirm("Restore tasks from this Ledger entry?")) return; let card = db.archive[idx]; card.tasks.forEach(task => { if(task.t.trim() !== "") { let emptyIdx = db.today.findIndex(t => t.t.trim() === ""); if (emptyIdx !== -1) db.today[emptyIdx] = JSON.parse(JSON.stringify(task)); else db.today.push(JSON.parse(JSON.stringify(task))); } }); save(); cur = 0; arcFocus = null; render(); }
     function openSettings() { document.getElementById('settings-menu').classList.add('open'); document.getElementById('ov').style.display='block'; }
     function closeAll() { document.getElementById('menu').classList.remove('open'); document.getElementById('settings-menu').classList.remove('open'); document.getElementById('ov').style.display='none'; }
-    function exportData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db)); a.download = "ledger_backup.json"; a.click(); }
-    function exportMarkdown() { let md = "# Ledger\n\n"; db.archive.slice().reverse().forEach(day => { md += `## ${day.d}\n`; day.tasks.filter(t=>t.t.trim()!=="").forEach(t => { let p = t.s===2 ? "[x]" : (t.s===3 ? "[>]" : "[ ]"); md += `${p} ${t.t}\n`; }); md += "\n"; }); const a = document.createElement('a'); a.href = "data:text/markdown;charset=utf-8," + encodeURIComponent(md); a.download = "ledger_history.md"; a.click(); }
+
+    // Feature 3: Backup tracking
+    function checkBackupStatus() {
+        const lastBackup = localStorage.getItem(STORAGE_KEY + '_lastBackup');
+        if (!lastBackup) {
+            localStorage.setItem(STORAGE_KEY + '_lastBackup', Date.now().toString());
+            return;
+        }
+        const daysSince = (Date.now() - parseInt(lastBackup)) / (1000 * 60 * 60 * 24);
+        if (daysSince > 7) {
+            document.getElementById('backup-banner').classList.add('visible');
+            document.body.classList.add('has-banner');
+        }
+    }
+
+    function dismissBanner() {
+        document.getElementById('backup-banner').classList.remove('visible');
+        document.body.classList.remove('has-banner');
+    }
+
+    function exportData() {
+        const a = document.createElement('a');
+        a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
+        a.download = "ledger_backup.json";
+        a.click();
+        localStorage.setItem(STORAGE_KEY + '_lastBackup', Date.now().toString());
+        dismissBanner();
+        closeAll();
+    }
+
+    function exportMarkdown() { let md = "# Ledger\n\n"; db.archive.slice().reverse().forEach(day => { md += `## ${day.d}\n`; day.tasks.filter(t=>t.t.trim()!=="").forEach(t => { let p = t.s===2 ? "[x]" : (t.s===3 ? "[>]" : "[ ]"); md += `${p} ${t.t}\n`; }); md += "\n"; }); const a = document.createElement('a'); a.href = "data:text/markdown;charset=utf-8," + encodeURIComponent(md); a.download = "ledger_history.md"; a.click(); closeAll(); }
     function importData() { document.getElementById('fileInput').click(); }
     document.getElementById('fileInput').onchange = e => { const reader = new FileReader(); reader.onload = ev => { db = JSON.parse(ev.target.result); save(); render(); closeAll(); }; reader.readAsText(e.target.files[0]); };
     function jump(dir) { let el = document.getElementById('card'); el.style.transform = `translateX(${-dir * 100}%)`; setTimeout(() => { cur = (cur + dir + 4) % 4; arcFocus = null; el.style.transition = 'none'; el.style.transform = `translateX(${dir * 100}%)`; render(); setTimeout(() => { el.style.transition = 'transform 0.25s cubic-bezier(0.2, 1, 0.3, 1)'; el.style.transform = 'translateX(0)'; }, 15); }, 200); }
     let sX = 0;
     document.addEventListener('touchstart', e => sX = e.touches[0].clientX);
     document.addEventListener('touchend', e => { let diff = e.changedTouches[0].clientX - sX; if(Math.abs(diff) > 70 && !dragEl) { if(arcFocus){ arcFocus=null; render(); return; } jump(diff > 0 ? -1 : 1); } });
+
     checkDayReset();
+    checkBackupStatus();
     render();
 </script>
 </body>
