@@ -566,7 +566,12 @@
     /* ── Long press on Ledger heading (3 seconds) triggers auth ── */
     function attachLongPress(el) {
         if (!el) return;
-        el.addEventListener('pointerdown', () => {
+        el.style.userSelect = 'none';
+        el.style.webkitUserSelect = 'none';
+        el.style.cursor = 'default';
+
+        const start = (e) => {
+            e.preventDefault();
             longPressTimer = setTimeout(() => {
                 if (supaSession) {
                     showToast('Already signed in to sync');
@@ -575,9 +580,17 @@
                     openAuthModal();
                 }
             }, 3000);
-        });
-        el.addEventListener('pointerup',   () => clearTimeout(longPressTimer));
-        el.addEventListener('pointerleave',() => clearTimeout(longPressTimer));
+        };
+        const cancel = () => clearTimeout(longPressTimer);
+
+        el.addEventListener('touchstart',  start,  { passive: false });
+        el.addEventListener('touchend',    cancel);
+        el.addEventListener('touchmove',   cancel);
+        el.addEventListener('touchcancel', cancel);
+        el.addEventListener('pointerdown', start);
+        el.addEventListener('pointerup',   cancel);
+        el.addEventListener('pointerleave',cancel);
+        el.addEventListener('contextmenu', e => e.preventDefault());
     }
 
     // Attach long press to desktop Ledger drawer title
