@@ -389,8 +389,10 @@
         localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
         localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
         localStorage.setItem(STORAGE_KEY+'_lastDate', db.lastActiveDate);
-        // Fire background sync if authenticated
-        if (supaSession) scheduleSyncPush();
+        // Only schedule a cloud push if no input is currently focused
+        if (supaSession && (!document.activeElement || document.activeElement.tagName !== 'INPUT')) {
+            scheduleSyncPush();
+        }
     }
 
     function checkDayReset() {
@@ -474,7 +476,6 @@
         if (!supaSession) return;
         setSyncStatus('syncing', 'Syncing…');
         try {
-            // Pull tasks
             const tasks = await supaFetch(
                 '/rest/v1/ledger_tasks?select=list,slot,t,s,c,updated_at&order=slot.asc',
                 'GET', null, supaSession.access_token
@@ -484,16 +485,13 @@
                 tasks.forEach(row => {
                     const local = db[row.list] && db[row.list][row.slot];
                     if (!local) return;
-                    const localTs = local.u || 0;
-                    const remoteTs = row.updated_at || 0;
-                    if (remoteTs > localTs) {
-                        db[row.list][row.slot] = { t: row.t, s: row.s, c: row.c, u: remoteTs };
+                    if ((row.updated_at||0) > (local.u||0)) {
+                        db[row.list][row.slot] = { t: row.t, s: row.s, c: row.c, u: row.updated_at||0 };
                         changed = true;
                     }
                 });
             }
 
-            // Pull archive
             const archive = await supaFetch(
                 '/rest/v1/ledger_archive?select=day_key,tasks,updated_at',
                 'GET', null, supaSession.access_token
@@ -510,21 +508,15 @@
                         changed = true;
                     }
                 });
-                if (changed) {
-                    db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
-                }
+                if (changed) db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
             }
 
             if (changed) {
-                // Save to localStorage
+                // Write to localStorage only — never touch the DOM
                 localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
                 localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next));
                 localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
                 localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
-                // Only re-render if no input is currently focused
-                if (!document.activeElement || document.activeElement.tagName !== 'INPUT') {
-                    render();
-                }
             }
 
             setSyncStatus('synced', 'Synced');
@@ -534,8 +526,7 @@
                 try { await syncPull(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
             } else {
                 setSyncStatus('error', 'Sync failed');
-                clearSession();
-                updateSyncUI();
+                clearSession(); updateSyncUI();
             }
         }
     }
@@ -943,6 +934,8 @@
         if(colKey==='arc') return;
         const item=db[colKey]&&db[colKey][i];
         if(item&&/\(\d+\)/.test(item.t)) render();
+        // Input lost focus — safe to push to cloud now
+        if(supaSession) scheduleSyncPush();
     }
 
     function cycleDots(idx,colKey) {
