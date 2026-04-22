@@ -266,7 +266,8 @@
         <div class="m-item" onclick="exportMarkdown()">Export Ledger (Markdown)</div>
         <div class="m-item" onclick="exportData()">Backup System (JSON)</div>
         <div class="m-item" onclick="importData()">Restore System (JSON)</div>
-        <div id="sync-settings-item" class="m-item" style="display:none;" onclick="signOut()">Sign Out of Sync</div>
+        <div id="sync-settings-item" class="m-item" style="display:none;" onclick="forcePush();closeAll();">Push Data to Cloud</div>
+        <div id="sync-signout-item" class="m-item" style="display:none;" onclick="signOut()">Sign Out of Sync</div>
         <div class="m-item" style="opacity:0.5;" onclick="closeAll()">Close</div>
     </div>
     <input type="file" id="fileInput" style="display:none" accept=".json">
@@ -568,14 +569,29 @@
             await sendMagicLink(email);
             msg.textContent = 'Check your email for a magic link.';
         } catch(e) {
-            msg.textContent = 'Something went wrong. Try again.';
+            // Show the actual error from Supabase so we can diagnose it
+            let errText = e.message || 'Unknown error';
+            try {
+                const parsed = JSON.parse(errText);
+                errText = parsed.error_description || parsed.msg || parsed.message || errText;
+            } catch(_) {}
+            msg.textContent = 'Error: ' + errText;
             btn.disabled = false;
         }
     }
 
+    // Force a sync push manually — useful for debugging
+    async function forcePush() {
+        if (!supaSession) { showToast('Not signed in to sync'); return; }
+        showToast('Pushing data…');
+        await syncPush();
+    }
+
     function updateSyncUI() {
-        const item = document.getElementById('sync-settings-item');
-        if (item) item.style.display = supaSession ? 'block' : 'none';
+        const push = document.getElementById('sync-settings-item');
+        const out  = document.getElementById('sync-signout-item');
+        if (push) push.style.display = supaSession ? 'block' : 'none';
+        if (out)  out.style.display  = supaSession ? 'block' : 'none';
     }
 
     function signOut() {
