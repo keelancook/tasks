@@ -3,29 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
     <style>
-        :root { 
+        :root {
             --rule: rgba(0,0,0,0.12); --text: #1a1a1a; --priority: #991b1b; --line: 52px;
-            --paper-today: #ffffff; --paper-next: #efdfb4; --paper-someday: #c7b399; --paper-ledger: #c7b399; 
+            --paper-today: #ffffff; --paper-next: #efdfb4; --paper-someday: #c7b399; --paper-ledger: #d6c5a8;
+            --desk: #1a1a1a; --top-rule: rgba(0,0,0,0.18);
         }
-        body { 
-            margin: 0; padding: 0; background: #1a1a1a; font-family: 'Nanum Pen Script', cursive; 
-            overflow: hidden; height: 100vh; width: 100vw; -webkit-tap-highlight-color: transparent;
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0; background: var(--desk);
+            font-family: 'Nanum Pen Script', cursive;
+            overflow: hidden; height: 100vh; width: 100vw;
+            -webkit-tap-highlight-color: transparent;
         }
+
+        /* ── MOBILE ── */
         #vp { width: 100%; height: 100vh; position: relative; overflow: hidden; }
-        .card { width: 100%; height: 100%; position: absolute; top: 0; left: 0; transition: transform 0.25s cubic-bezier(0.2, 1, 0.3, 1); box-sizing: border-box; }
+        .card { width: 100%; height: 100%; position: absolute; top: 0; left: 0; transition: transform 0.25s cubic-bezier(0.2,1,0.3,1); }
         .c-today { background: var(--paper-today); }
         .c-next { background: var(--paper-next); }
         .c-someday { background: var(--paper-someday); }
         .c-ledger { background: var(--paper-ledger); }
-        .hdr { height: 100px; display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 0 20px; box-sizing: border-box; }
+        .hdr { height: 100px; display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 0 20px; }
         .hdr b { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: #000; }
         .hdr span { font-size: 22px; color: rgba(0,0,0,0.5); text-align: right; padding-top: 2px; }
+        .top-rule { height: 1px; background: var(--top-rule); margin: 0 20px; }
         ul { list-style: none; margin: 0; padding: 0; position: relative; }
-        li { height: var(--line); display: flex; align-items: center; padding: 0 15px; position: relative; background: transparent; touch-action: none; box-sizing: border-box; }
+        li { height: var(--line); display: flex; align-items: center; padding: 0 15px; position: relative; background: transparent; touch-action: none; }
         li::after { content: ""; position: absolute; bottom: 0; left: 48px; right: 15px; height: 1px; background-color: var(--rule); }
         li.dragging { opacity: 0.8; transform: scale(1.02); box-shadow: 0 5px 15px rgba(0,0,0,0.1); background: rgba(255,255,255,0.4); z-index: 100; }
+        li.kb-focus { outline: none; background: rgba(0,0,0,0.05); }
         .btn-c { width: 18px; height: 18px; border: 1.2px solid #000; border-radius: 50%; margin-right: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 2; background: transparent; position: relative; overflow: hidden; }
         .today-list li:nth-child(-n+3) .btn-c { border-color: var(--priority); border-width: 2px; }
         .btn-c.s-progress { background: linear-gradient(90deg, #000 50%, transparent 50%); }
@@ -34,17 +42,23 @@
         .inp-wrap { flex: 1; display: flex; align-items: center; min-width: 0; position: relative; height: 100%; }
         input { flex: 1; border: none; font-size: 24px; outline: none; background: transparent; color: var(--text); z-index: 2; font-family: 'Nanum Pen Script', cursive; min-width: 0; padding-top: 4px; }
         .done { text-decoration: line-through; color: rgba(0,0,0,0.45); opacity: 0.7; }
-        .tally-hit-zone { display: grid; grid-template-rows: repeat(2, 1fr); grid-auto-flow: column; gap: 4px; height: 24px; padding: 0 8px 0 12px; cursor: pointer; z-index: 5; align-items: center; }
+        .tally-hit-zone { display: grid; grid-template-rows: repeat(2,1fr); grid-auto-flow: column; gap: 4px; height: 24px; padding: 0 8px 0 12px; cursor: pointer; z-index: 5; align-items: center; }
         .dot { width: 5px; height: 5px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.2); transition: all 0.1s; }
         .dot.active { background: #000; border-color: #000; transform: scale(1.1); }
         .ctrls { display: flex; align-items: center; gap: 8px; color: rgba(0,0,0,0.3); z-index: 2; flex-shrink: 0; font-family: sans-serif; }
-        .dots, .hndl { padding: 5px; font-size: 18px; cursor: pointer; user-select: none; }
-        .hndl { font-size: 20px; }
+        .dots { padding: 5px; font-size: 18px; cursor: pointer; user-select: none; }
+        .hndl { padding: 5px; cursor: grab; user-select: none; display: flex; align-items: center; }
+        .hndl:active { cursor: grabbing; }
+        .hndl svg { width: 14px; height: 18px; display: block; }
+        #drag-ghost { position: fixed; pointer-events: none; z-index: 9999; opacity: 0.85; background: rgba(255,255,255,0.92); box-shadow: 0 4px 16px rgba(0,0,0,0.15); border-radius: 3px; transform: scale(1.02); display: none; align-items: center; padding: 0 15px; height: var(--line); min-width: 200px; font-family: 'Nanum Pen Script', cursive; font-size: 24px; color: var(--text); }
+        li.drop-target-above::before { content: ''; position: absolute; top: 0; left: 10px; right: 10px; height: 2px; background: rgba(0,0,0,0.35); border-radius: 1px; z-index: 10; }
+        li.drop-target-below::after { content: ''; position: absolute; bottom: 0; left: 10px; right: 10px; height: 2px; background: rgba(0,0,0,0.35) !important; border-radius: 1px; z-index: 10; }
         .fin-btn { padding: 8px 18px; background: #fff; color: #000; border: 1px solid rgba(0,0,0,0.4); border-radius: 6px; font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
-        #menu, #settings-menu { position: fixed; bottom: -100%; left: 0; width: 100%; background: #fff; box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-radius: 24px 24px 0 0; transition: 0.3s cubic-bezier(0.2, 1, 0.3, 1); z-index: 100; padding-bottom: 40px; font-family: 'Cormorant Garamond', serif; }
+        #menu, #settings-menu { position: fixed; bottom: -100%; left: 0; width: 100%; background: #fff; box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-radius: 24px 24px 0 0; transition: 0.3s cubic-bezier(0.2,1,0.3,1); z-index: 1000; padding-bottom: 40px; font-family: 'Cormorant Garamond', serif; }
         #menu.open, #settings-menu.open { bottom: 0; }
         .m-item { padding: 20px; text-align: center; border-bottom: 1px solid #f5f5f5; color: #111; font-size: 20px; font-weight: 500; letter-spacing: 0.5px; cursor: pointer; }
-        #ov { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 90; }
+        .m-item:hover { background: rgba(0,0,0,0.03); }
+        #ov { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 900; }
         .ledger-item { padding: 12px 20px; border-bottom: 1px solid var(--rule); display: flex; align-items: center; min-height: 64px; }
         .ledger-date { flex: 1; font-size: 28px; cursor: pointer; padding: 5px 0; }
         .ledger-ctrls { display: flex; align-items: center; gap: 4px; height: 44px; }
@@ -53,18 +67,124 @@
         .ledger-del { color: var(--priority); }
         .ledger-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; display: block; }
         .settings-trigger { width: 24px; height: 24px; fill: rgba(0,0,0,0.6); margin-top: 4px; cursor: pointer; }
-
-        /* Feature 1: Month Stacks */
-        .month-stack { border-bottom: 1px solid rgba(0,0,0,0.15); }
-        .month-stack summary { list-style: none; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: rgba(0,0,0,0.55); user-select: none; }
+        .month-stack { border-bottom: 1px solid rgba(0,0,0,0.12); }
+        .month-stack summary { list-style: none; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: rgba(0,0,0,0.5); user-select: none; }
         .month-stack summary::-webkit-details-marker { display: none; }
         .stack-count { font-family: sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; background: rgba(0,0,0,0.1); border-radius: 10px; padding: 2px 8px; }
 
-        /* Feature 3: Backup Banner */
-        #backup-banner { display: none; position: fixed; top: 0; left: 0; right: 0; background: #991b1b; color: #fff; font-family: sans-serif; font-size: 13px; font-weight: 600; padding: 10px 16px; z-index: 200; text-align: center; line-height: 1.4; }
+        /* ── Backup banner ── */
+        #backup-banner { display: none; position: fixed; top: 0; left: 0; right: 0; background: #991b1b; color: #fff; font-family: sans-serif; font-size: 13px; font-weight: 600; padding: 10px 16px; z-index: 500; text-align: center; line-height: 1.4; }
         #backup-banner.visible { display: block; }
-        #backup-banner button { margin-left: 12px; background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5); color: #fff; border-radius: 4px; padding: 3px 10px; font-size: 12px; font-weight: 700; cursor: pointer; vertical-align: middle; }
+        #backup-banner button { margin-left: 12px; background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5); color: #fff; border-radius: 4px; padding: 3px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
         body.has-banner #vp { padding-top: 40px; height: calc(100vh - 40px); }
+        body.has-banner #dt-tray { padding-top: 40px; }
+
+        /* ── Sync status indicator ── */
+        #sync-indicator {
+            position: fixed; bottom: 16px; right: 16px;
+            font-family: 'Cormorant Garamond', serif; font-size: 13px;
+            letter-spacing: 0.5px; color: rgba(255,255,255,0.35);
+            display: none; align-items: center; gap: 6px;
+            z-index: 50; pointer-events: none;
+        }
+        #sync-indicator.visible { display: flex; }
+        #sync-indicator.syncing { color: rgba(255,255,255,0.6); }
+        #sync-indicator.error { color: rgba(180,60,60,0.8); }
+        #sync-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: currentColor; flex-shrink: 0;
+        }
+        #sync-indicator.syncing #sync-dot { animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* ── Auth modal ── */
+        #auth-modal {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6); z-index: 2000;
+            align-items: center; justify-content: center;
+        }
+        #auth-modal.visible { display: flex; }
+        #auth-box {
+            background: var(--paper-ledger); border-radius: 8px;
+            padding: 36px 32px; width: 320px; max-width: 90vw;
+            font-family: 'Cormorant Garamond', serif;
+        }
+        #auth-box h2 { margin: 0 0 6px; font-size: 22px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: #000; }
+        #auth-box p { margin: 0 0 24px; font-size: 15px; color: rgba(0,0,0,0.5); font-style: italic; }
+        #auth-email {
+            width: 100%; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px;
+            padding: 10px 12px; font-family: sans-serif; font-size: 15px;
+            background: rgba(255,255,255,0.6); color: #000; outline: none;
+            margin-bottom: 12px;
+        }
+        #auth-email:focus { border-color: rgba(0,0,0,0.4); }
+        #auth-submit {
+            width: 100%; padding: 11px; background: #1a1a1a; color: #fff;
+            border: none; border-radius: 4px; font-family: 'Cormorant Garamond', serif;
+            font-size: 16px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+            cursor: pointer;
+        }
+        #auth-submit:disabled { opacity: 0.5; cursor: default; }
+        #auth-msg { margin-top: 14px; font-size: 14px; color: rgba(0,0,0,0.55); font-style: italic; min-height: 20px; }
+        #auth-cancel { margin-top: 10px; width: 100%; padding: 8px; background: transparent; border: none; font-family: 'Cormorant Garamond', serif; font-size: 15px; color: rgba(0,0,0,0.4); cursor: pointer; }
+        #auth-cancel:hover { color: rgba(0,0,0,0.7); }
+
+        /* ── DESKTOP ── */
+        #dt-layout { display: none; }
+
+        @media (min-width: 900px) {
+            #vp { display: none; }
+            #dt-layout { display: flex; align-items: center; justify-content: center; width: 100%; height: 100vh; padding: 0; position: relative; }
+            #dt-tray { display: flex; align-items: stretch; width: 100%; max-width: 1320px; height: 100%; max-height: 900px; padding: clamp(24px,3vh,48px) 72px clamp(24px,3vh,48px) 40px; gap: 0; position: relative; --card-gap: clamp(16px, calc((100vw - 1320px) * 0.05 + 16px), 32px); }
+            #dt-cards { display: flex; gap: var(--card-gap); flex: 1; min-width: 0; align-items: stretch; }
+            .dt-card { flex: 1; display: flex; flex-direction: column; border-radius: 3px; overflow: hidden; min-width: 0; }
+            .dt-card.c-today { background: var(--paper-today); }
+            .dt-card.c-next { background: var(--paper-next); }
+            .dt-card.c-someday { background: var(--paper-someday); }
+            .dt-hdr { padding: 28px 24px 0 24px; flex-shrink: 0; }
+            .dt-hdr-top { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 18px; }
+            .dt-hdr-top b { font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 500; letter-spacing: 3px; text-transform: uppercase; color: #000; cursor: default; }
+            .dt-hdr-top span { font-family: 'Cormorant Garamond', serif; font-size: 14px; font-style: italic; font-weight: 400; color: rgba(0,0,0,0.38); letter-spacing: 0.5px; }
+            .dt-rule { height: 1px; background: var(--top-rule); }
+            .dt-body { flex: 1; overflow-y: auto; padding-bottom: 24px; }
+            .dt-card li { height: 48px; padding: 0 14px; }
+            .dt-card input { font-size: 22px; }
+            .dt-card.drag-over { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.18); }
+            .dt-fin-wrap { padding: 16px 24px 24px; flex-shrink: 0; text-align: center; }
+            #dt-ledger-btn { position: fixed; right: 0; top: 0; bottom: 0; width: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; user-select: none; z-index: 10; opacity: 0.28; transition: opacity 0.2s; }
+            #dt-ledger-btn:hover { opacity: 0.7; }
+            #dt-ledger-btn svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+            #dt-ledger-btn span { font-family: 'Cormorant Garamond', serif; font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.8); writing-mode: vertical-rl; }
+            #dt-drawer { position: fixed; top: 0; right: -400px; width: 360px; height: 100vh; background: var(--paper-ledger); transition: right 0.32s cubic-bezier(0.2,1,0.3,1); z-index: 200; display: flex; flex-direction: column; box-shadow: -6px 0 32px rgba(0,0,0,0.22); }
+            #dt-drawer.open { right: 0; }
+            #dt-drawer-hdr { padding: 28px 24px 0 24px; flex-shrink: 0; }
+            #dt-drawer-hdr-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; }
+            #dt-drawer-hdr-top b { font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 500; letter-spacing: 3px; text-transform: uppercase; color: #000; user-select: none; }
+            #dt-drawer-actions { display: flex; align-items: center; gap: 10px; }
+            #dt-drawer-gear { cursor: pointer; opacity: 0.4; transition: opacity 0.15s; }
+            #dt-drawer-gear:hover { opacity: 0.85; }
+            #dt-drawer-gear svg { width: 19px; height: 19px; fill: rgba(0,0,0,0.7); display: block; }
+            #dt-drawer-close { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.35; border-radius: 50%; transition: opacity 0.15s; }
+            #dt-drawer-close:hover { opacity: 0.8; }
+            #dt-drawer-close svg { width: 17px; height: 17px; stroke: #000; fill: none; stroke-width: 2.5; stroke-linecap: round; }
+            #dt-drawer-rule { height: 1px; background: var(--top-rule); flex-shrink: 0; }
+            #dt-drawer-body { flex: 1; overflow-y: auto; padding-bottom: 40px; }
+            #dt-arc-banner { display: none; padding: 9px 24px; background: rgba(0,0,0,0.07); flex-shrink: 0; font-family: 'Cormorant Garamond', serif; font-size: 13px; letter-spacing: 1px; color: rgba(0,0,0,0.5); text-transform: uppercase; align-items: center; justify-content: space-between; }
+            #dt-arc-banner.visible { display: flex; }
+            #dt-arc-back { cursor: pointer; font-size: 13px; color: rgba(0,0,0,0.45); letter-spacing: 0.5px; font-style: italic; }
+            #dt-arc-back:hover { color: rgba(0,0,0,0.8); }
+            #dt-keys { position: fixed; bottom: 0; left: 0; right: 72px; display: flex; align-items: center; justify-content: center; gap: 28px; padding: 9px 0 11px; pointer-events: none; transition: right 0.32s cubic-bezier(0.2,1,0.3,1); }
+            #dt-keys.drawer-open { right: 360px; }
+            .kb-hint { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.5px; color: rgba(255,255,255,0.22); display: flex; align-items: center; gap: 5px; }
+            .kb-hint kbd { display: inline-flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 3px; padding: 1px 5px; min-width: 18px; }
+            /* sync indicator repositions on desktop */
+            #sync-indicator { bottom: 36px; right: 88px; }
+        }
+
+        @media (max-width: 899px) {
+            #dt-layout { display: none !important; }
+            #vp { display: block !important; }
+        }
     </style>
 </head>
 <body>
@@ -73,7 +193,70 @@
         <button onclick="exportData()">Export Now</button>
     </div>
 
+    <!-- sync status -->
+    <div id="sync-indicator"><div id="sync-dot"></div><span id="sync-label">Synced</span></div>
+
+    <!-- auth modal -->
+    <div id="auth-modal">
+        <div id="auth-box">
+            <h2>Sync</h2>
+            <p>Enter your email to receive a magic link</p>
+            <input id="auth-email" type="email" placeholder="your@email.com" autocomplete="email">
+            <button id="auth-submit" onclick="submitMagicLink()">Send Link</button>
+            <div id="auth-msg"></div>
+            <button id="auth-cancel" onclick="closeAuthModal()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- MOBILE -->
     <div id="vp"><div id="card" class="card"></div></div>
+
+    <!-- DESKTOP -->
+    <div id="dt-layout">
+        <div id="dt-tray">
+            <div id="dt-cards">
+                <div id="dt-today"   data-col="today"   class="dt-card c-today"></div>
+                <div id="dt-next"    data-col="next"     class="dt-card c-next"></div>
+                <div id="dt-someday" data-col="someday"  class="dt-card c-someday"></div>
+            </div>
+        </div>
+        <div id="dt-ledger-btn" onclick="dtOpenLedger()" title="Open Ledger (L)">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"/></svg>
+            <span>Ledger</span>
+        </div>
+        <div id="dt-keys">
+            <span class="kb-hint"><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span class="kb-hint"><kbd>Space</kbd> toggle</span>
+            <span class="kb-hint"><kbd>Enter</kbd> edit</span>
+            <span class="kb-hint"><kbd>Tab</kbd> next card</span>
+            <span class="kb-hint"><kbd>L</kbd> ledger</span>
+            <span class="kb-hint"><kbd>Esc</kbd> back</span>
+        </div>
+    </div>
+
+    <!-- Ledger drawer -->
+    <div id="dt-drawer">
+        <div id="dt-drawer-hdr">
+            <div id="dt-drawer-hdr-top">
+                <b id="drawer-ledger-title">Ledger</b>
+                <div id="dt-drawer-actions">
+                    <div id="dt-drawer-gear" onclick="openSettings()" title="Settings">
+                        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                    </div>
+                    <div id="dt-drawer-close" onclick="dtCloseLedger()" title="Close (Esc)">
+                        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="dt-drawer-rule"></div>
+        <div id="dt-arc-banner">
+            <span id="dt-arc-date"></span>
+            <span id="dt-arc-back" onclick="dtClearArc()">← Back</span>
+        </div>
+        <div id="dt-drawer-body"></div>
+    </div>
+
     <div id="ov" onclick="closeAll()"></div>
     <div id="menu">
         <div id="m-options-container"></div>
@@ -83,273 +266,989 @@
         <div class="m-item" onclick="exportMarkdown()">Export Ledger (Markdown)</div>
         <div class="m-item" onclick="exportData()">Backup System (JSON)</div>
         <div class="m-item" onclick="importData()">Restore System (JSON)</div>
-        <div class="m-item" style="opacity:0.5; font-weight:400;" onclick="closeAll()">Close</div>
+        <div id="sync-settings-item" class="m-item" style="display:none;" onclick="signOut()">Sign Out of Sync</div>
+        <div class="m-item" style="opacity:0.5;" onclick="closeAll()">Close</div>
     </div>
     <input type="file" id="fileInput" style="display:none" accept=".json">
+    <div id="drag-ghost"></div>
 
 <script>
+    /* ═══════════════════════════════════════════
+       SUPABASE CONFIG
+    ═══════════════════════════════════════════ */
+    const SUPA_URL  = 'https://dxplietmqbpncikyhwve.supabase.co';
+    const SUPA_KEY  = 'sb_publishable_1yrXYKJBq8O51o_PFw7HhQ_qMS_R99-';
+
+    // Minimal Supabase REST client — no SDK needed
+    async function supaFetch(path, method='GET', body=null, token=null) {
+        const headers = {
+            'apikey': SUPA_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': method==='POST' ? 'resolution=merge-duplicates,return=minimal' : 'return=representation'
+        };
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        const res = await fetch(SUPA_URL + path, {
+            method, headers,
+            body: body ? JSON.stringify(body) : null
+        });
+        if (!res.ok) {
+            const err = await res.text();
+            throw new Error(err);
+        }
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    }
+
+    // Supabase Auth helpers
+    async function sendMagicLink(email) {
+        const res = await fetch(`${SUPA_URL}/auth/v1/otp`, {
+            method: 'POST',
+            headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, create_user: true })
+        });
+        if (!res.ok) throw new Error(await res.text());
+    }
+
+    async function exchangeToken(accessToken, refreshToken) {
+        // Store session
+        localStorage.setItem(STORAGE_KEY+'_supa_access', accessToken);
+        localStorage.setItem(STORAGE_KEY+'_supa_refresh', refreshToken);
+        supaSession = { access_token: accessToken, refresh_token: refreshToken };
+    }
+
+    async function refreshSession() {
+        const refresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
+        if (!refresh) return false;
+        try {
+            const res = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
+                method: 'POST',
+                headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: refresh })
+            });
+            if (!res.ok) { clearSession(); return false; }
+            const data = await res.json();
+            await exchangeToken(data.access_token, data.refresh_token);
+            return true;
+        } catch(e) { return false; }
+    }
+
+    function clearSession() {
+        localStorage.removeItem(STORAGE_KEY+'_supa_access');
+        localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
+        supaSession = null;
+    }
+
+    /* ═══════════════════════════════════════════
+       STATE
+    ═══════════════════════════════════════════ */
     let cur = 0, sel = null, arcFocus = null, dragEl = null;
-    const STORAGE_KEY = 'ledger_db';
-    const OLD_KEY = 'analog_db';
+    let dtActiveCol = 0, dtFocusRow = -1, dtLedgerOpen = false;
+    let supaSession = null;
+    let syncPending = false;
+    let longPressTimer = null;
 
-    function getShortDate(dObj) { return `${dObj.toLocaleDateString('en-US', { month: 'short' })} ${dObj.getDate()}, ${dObj.getFullYear()}`; }
+    const STORAGE_KEY = 'ledger_db', OLD_KEY = 'analog_db';
+    const COLS = ['today','next','someday'];
 
+    function getShortDate(d) {
+        return `${d.toLocaleDateString('en-US',{month:'short'})} ${d.getDate()}, ${d.getFullYear()}`;
+    }
+
+    /* ── Migration ── */
     function migrate() {
-        const keys = ['_t', '_n', '_s', '_a', '_lastDate'];
-        keys.forEach(k => {
-            const oldData = localStorage.getItem(OLD_KEY + k);
-            const newData = localStorage.getItem(STORAGE_KEY + k);
-            if (oldData && !newData) localStorage.setItem(STORAGE_KEY + k, oldData);
+        ['_t','_n','_s','_a','_lastDate'].forEach(k => {
+            const o=localStorage.getItem(OLD_KEY+k), n=localStorage.getItem(STORAGE_KEY+k);
+            if(o&&!n) localStorage.setItem(STORAGE_KEY+k,o);
         });
     }
     migrate();
 
     let db = {
-        today: JSON.parse(localStorage.getItem(STORAGE_KEY+'_t')) || Array(10).fill().map(()=>({t:"", s:0, c:0})),
-        next: JSON.parse(localStorage.getItem(STORAGE_KEY+'_n')) || Array(10).fill().map(()=>({t:"", s:0, c:0})),
-        someday: JSON.parse(localStorage.getItem(STORAGE_KEY+'_s')) || Array(10).fill().map(()=>({t:"", s:0, c:0})),
-        archive: JSON.parse(localStorage.getItem(STORAGE_KEY+'_a')) || [],
-        lastActiveDate: localStorage.getItem(STORAGE_KEY+'_lastDate') || getShortDate(new Date())
+        today:   JSON.parse(localStorage.getItem(STORAGE_KEY+'_t'))||Array(10).fill().map(()=>({t:'',s:0,c:0,u:0})),
+        next:    JSON.parse(localStorage.getItem(STORAGE_KEY+'_n'))||Array(10).fill().map(()=>({t:'',s:0,c:0,u:0})),
+        someday: JSON.parse(localStorage.getItem(STORAGE_KEY+'_s'))||Array(10).fill().map(()=>({t:'',s:0,c:0,u:0})),
+        archive: JSON.parse(localStorage.getItem(STORAGE_KEY+'_a'))||[],
+        lastActiveDate: localStorage.getItem(STORAGE_KEY+'_lastDate')||getShortDate(new Date())
     };
 
-    function save() { 
-        localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today)); 
-        localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next)); 
-        localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday)); 
-        localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive)); 
+    // Ensure all tasks have timestamps (backwards compat)
+    function ensureTimestamps() {
+        COLS.forEach(col => {
+            db[col].forEach(task => { if(!task.u) task.u = 0; });
+        });
+    }
+    ensureTimestamps();
+
+    function touchTask(task) {
+        task.u = Date.now();
+    }
+
+    function save() {
+        localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
+        localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next));
+        localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
+        localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
         localStorage.setItem(STORAGE_KEY+'_lastDate', db.lastActiveDate);
+        // Fire background sync if authenticated
+        if (supaSession) scheduleSyncPush();
     }
 
     function checkDayReset() {
         const todayStr = getShortDate(new Date());
-        if (db.lastActiveDate !== todayStr) { 
-            const dayToCommit = db.lastActiveDate;
-            db.archive.push({ d: dayToCommit, tasks: JSON.parse(JSON.stringify(db.today)) });
-            const migrated = db.today.filter(t => (t.s === 1 || t.s === 3) && t.t.trim() !== "");
-            db.today = Array(10).fill().map(()=>({t:"", s:0, c:0}));
-            migrated.forEach((t, i) => { if(i < 10) db.today[i] = JSON.parse(JSON.stringify(t)); });
-            db.lastActiveDate = todayStr;
-            save();
+        if(db.lastActiveDate!==todayStr) {
+            db.archive.push({d:db.lastActiveDate, tasks:JSON.parse(JSON.stringify(db.today)), u:Date.now()});
+            const migrated=db.today.filter(t=>(t.s===1||t.s===3)&&t.t.trim()!=='');
+            db.today=Array(10).fill().map(()=>({t:'',s:0,c:0,u:0}));
+            migrated.forEach((t,i)=>{if(i<10){db.today[i]=JSON.parse(JSON.stringify(t)); db.today[i].u=Date.now();}});
+            db.lastActiveDate=todayStr; save();
         }
     }
 
-    // Feature 1: group archive by month
-    function groupArchiveByMonth(archive) {
-        const groups = {};
-        const order = [];
-        archive.forEach((entry, realIdx) => {
-            const parsed = new Date(entry.d);
-            const key = parsed.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            if (!groups[key]) { groups[key] = []; order.push(key); }
-            groups[key].push({ entry, realIdx });
-        });
-        return { groups, order };
+    function isDesktop() { return window.innerWidth >= 900; }
+
+    /* ═══════════════════════════════════════════
+       SYNC ENGINE
+    ═══════════════════════════════════════════ */
+    let syncPushTimer = null;
+
+    function scheduleSyncPush() {
+        // Debounce — wait 1.5s after last save before pushing
+        clearTimeout(syncPushTimer);
+        syncPushTimer = setTimeout(() => syncPush(), 1500);
     }
 
-    function getCurrentMonthKey() {
-        return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    function setSyncStatus(state, label) {
+        const el = document.getElementById('sync-indicator');
+        const lb = document.getElementById('sync-label');
+        if (!el) return;
+        el.className = 'visible ' + state;
+        lb.textContent = label;
+        if (state === 'synced') {
+            setTimeout(() => { el.classList.remove('visible'); }, 3000);
+        }
     }
 
-    function render() {
-        const views = ['today', 'next', 'someday', 'ledger'];
-        const v = views[cur];
-        const el = document.getElementById('card');
-        const todayShort = getShortDate(new Date());
-        el.className = 'card ' + (arcFocus ? 'c-ledger' : 'c-' + (v==='ledger'?'ledger':v));
+    async function syncPush() {
+        if (!supaSession) return;
+        setSyncStatus('syncing', 'Syncing…');
+        try {
+            // Push all task slots
+            const rows = [];
+            COLS.forEach(list => {
+                db[list].forEach((task, slot) => {
+                    rows.push({ list, slot, t: task.t, s: task.s, c: task.c, updated_at: task.u||0 });
+                });
+            });
+            await supaFetch('/rest/v1/ledger_tasks', 'POST', rows, supaSession.access_token);
 
-        if(cur === 3 && !arcFocus) {
-            const gear = `<svg class="settings-trigger" onclick="openSettings()" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
-            el.innerHTML = `<div class="hdr"><b>Ledger</b>${gear}</div><div id="ledger-list" style="overflow-y:auto; height:calc(100% - 100px); padding-bottom:40px; box-sizing:border-box;"></div>`;
-            const listEl = document.getElementById('ledger-list');
-
-            if (db.archive.length === 0) {
-                listEl.innerHTML = `<div style="padding:40px 20px; text-align:center; font-family:'Cormorant Garamond',serif; font-size:18px; color:rgba(0,0,0,0.35); letter-spacing:1px;">No entries yet.</div>`;
-                return;
+            // Push archive entries
+            const archiveRows = db.archive.map(entry => ({
+                day_key: entry.d,
+                tasks: entry.tasks,
+                updated_at: entry.u || 0
+            }));
+            if (archiveRows.length > 0) {
+                await supaFetch('/rest/v1/ledger_archive', 'POST', archiveRows, supaSession.access_token);
             }
 
-            const { groups, order } = groupArchiveByMonth(db.archive);
-            const currentMonthKey = getCurrentMonthKey();
+            setSyncStatus('synced', 'Synced');
+        } catch(e) {
+            // Try refreshing session once
+            const refreshed = await refreshSession();
+            if (refreshed) {
+                try { await syncPush(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
+            } else {
+                setSyncStatus('error', 'Sync failed');
+            }
+        }
+    }
 
-            [...order].reverse().forEach(monthKey => {
-                const entries = groups[monthKey];
-                const isCurrentMonth = (monthKey === currentMonthKey);
-                const details = document.createElement('details');
-                details.className = 'month-stack';
-                if (isCurrentMonth) details.open = true;
-
-                const summary = document.createElement('summary');
-                summary.innerHTML = `<span>${monthKey}</span><span class="stack-count">${entries.length} day${entries.length !== 1 ? 's' : ''}</span>`;
-                details.appendChild(summary);
-
-                [...entries].reverse().forEach(({ entry, realIdx }) => {
-                    const r = document.createElement('div');
-                    r.className = 'ledger-item';
-                    r.innerHTML = `<div class="ledger-date" onclick="viewArc(${realIdx})">${entry.d}</div><div class="ledger-ctrls"><div class="ledger-btn ledger-undo" onclick="undoFin(${realIdx})"><svg viewBox="0 0 24 24" stroke="black" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></div><div class="ledger-btn ledger-del" onclick="delArch(event, ${realIdx})"><svg viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke="red"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></div></div>`;
-                    details.appendChild(r);
+    async function syncPull() {
+        if (!supaSession) return;
+        setSyncStatus('syncing', 'Syncing…');
+        try {
+            // Pull tasks
+            const tasks = await supaFetch(
+                '/rest/v1/ledger_tasks?select=list,slot,t,s,c,updated_at&order=slot.asc',
+                'GET', null, supaSession.access_token
+            );
+            if (tasks && tasks.length > 0) {
+                tasks.forEach(row => {
+                    const local = db[row.list] && db[row.list][row.slot];
+                    if (!local) return;
+                    const localTs = local.u || 0;
+                    const remoteTs = row.updated_at || 0;
+                    if (remoteTs > localTs) {
+                        db[row.list][row.slot] = { t: row.t, s: row.s, c: row.c, u: remoteTs };
+                    }
                 });
-                listEl.appendChild(details);
+            }
+
+            // Pull archive
+            const archive = await supaFetch(
+                '/rest/v1/ledger_archive?select=day_key,tasks,updated_at',
+                'GET', null, supaSession.access_token
+            );
+            if (archive && archive.length > 0) {
+                archive.forEach(row => {
+                    const existing = db.archive.find(e => e.d === row.day_key);
+                    if (!existing) {
+                        db.archive.push({ d: row.day_key, tasks: row.tasks, u: row.updated_at||0 });
+                    } else if ((row.updated_at||0) > (existing.u||0)) {
+                        existing.tasks = row.tasks;
+                        existing.u = row.updated_at||0;
+                    }
+                });
+                // Sort archive by date
+                db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
+            }
+
+            save();
+            setSyncStatus('synced', 'Synced');
+            render();
+        } catch(e) {
+            const refreshed = await refreshSession();
+            if (refreshed) {
+                try { await syncPull(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
+            } else {
+                setSyncStatus('error', 'Sync failed');
+                clearSession();
+                updateSyncUI();
+            }
+        }
+    }
+
+    /* ═══════════════════════════════════════════
+       AUTH UI
+    ═══════════════════════════════════════════ */
+    function openAuthModal() {
+        document.getElementById('auth-modal').classList.add('visible');
+        document.getElementById('auth-email').value = '';
+        document.getElementById('auth-msg').textContent = '';
+        document.getElementById('auth-submit').disabled = false;
+        setTimeout(() => document.getElementById('auth-email').focus(), 100);
+    }
+
+    function closeAuthModal() {
+        document.getElementById('auth-modal').classList.remove('visible');
+    }
+
+    async function submitMagicLink() {
+        const email = document.getElementById('auth-email').value.trim();
+        if (!email) return;
+        const btn = document.getElementById('auth-submit');
+        const msg = document.getElementById('auth-msg');
+        btn.disabled = true;
+        msg.textContent = 'Sending…';
+        try {
+            await sendMagicLink(email);
+            msg.textContent = 'Check your email for a magic link.';
+        } catch(e) {
+            msg.textContent = 'Something went wrong. Try again.';
+            btn.disabled = false;
+        }
+    }
+
+    function updateSyncUI() {
+        const item = document.getElementById('sync-settings-item');
+        if (item) item.style.display = supaSession ? 'block' : 'none';
+    }
+
+    function signOut() {
+        clearSession();
+        updateSyncUI();
+        setSyncStatus('synced', '');
+        document.getElementById('sync-indicator').classList.remove('visible');
+        closeAll();
+        showToast('Signed out of sync');
+    }
+
+    /* ── Long press on Ledger heading (3 seconds) triggers auth ── */
+    function attachLongPress(el) {
+        if (!el) return;
+        el.addEventListener('pointerdown', () => {
+            longPressTimer = setTimeout(() => {
+                if (supaSession) {
+                    showToast('Already signed in to sync');
+                } else {
+                    if (isDesktop()) dtCloseLedger();
+                    openAuthModal();
+                }
+            }, 3000);
+        });
+        el.addEventListener('pointerup',   () => clearTimeout(longPressTimer));
+        el.addEventListener('pointerleave',() => clearTimeout(longPressTimer));
+    }
+
+    // Attach long press to desktop Ledger drawer title
+    attachLongPress(document.getElementById('drawer-ledger-title'));
+
+    /* ── Handle magic link token on page load ── */
+    async function handleAuthRedirect() {
+        const hash = window.location.hash;
+        if (!hash) return;
+        const params = new URLSearchParams(hash.replace('#','?').replace('#','&'));
+        const accessToken  = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        if (accessToken && refreshToken) {
+            await exchangeToken(accessToken, refreshToken);
+            // Clean the URL
+            history.replaceState(null, '', window.location.pathname);
+            showToast('Sync enabled');
+            updateSyncUI();
+            await syncPull();
+        }
+    }
+
+    /* ── Restore session from localStorage on load ── */
+    async function restoreSession() {
+        const access  = localStorage.getItem(STORAGE_KEY+'_supa_access');
+        const refresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
+        if (access && refresh) {
+            supaSession = { access_token: access, refresh_token: refresh };
+            updateSyncUI();
+            // Pull latest on load
+            await syncPull();
+        }
+    }
+
+    /* ═══════════════════════════════════════════
+       SHARED SVGs
+    ═══════════════════════════════════════════ */
+    const gearPath = `M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z`;
+    const gearSVG = `<svg class="settings-trigger" onclick="openSettings()" viewBox="0 0 24 24"><path d="${gearPath}"/></svg>`;
+    const arrowSVG = `<svg class="del-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="12" x2="17" y2="12"/><polyline points="12 7 17 12 12 17"/></svg>`;
+
+    /* ═══════════════════════════════════════════
+       BUILD TASK ROW
+    ═══════════════════════════════════════════ */
+    function buildTaskRow(item, i, colKey, readonly) {
+        const li = document.createElement('li');
+        li.dataset.idx = i; li.dataset.col = colKey; li.tabIndex = -1;
+        let btnClass = 'btn-c';
+        if(item.s===1) btnClass+=' s-progress';
+        if(item.s===2) btnClass+=' s-done';
+        const icon = item.s===3 ? arrowSVG : '';
+        const tagMatch = item.t.match(/\((\d+)\)/);
+        const goal = tagMatch ? parseInt(tagMatch[1]) : 0;
+        const cleanText = item.t.replace(/\(\d+\)/g,'').trim();
+        const count = item.c||0;
+        let dotsHTML = '';
+        if(goal>0) {
+            dotsHTML=`<div class="tally-hit-zone" onclick="cycleDots(${i},'${colKey}')">`;
+            for(let d=1;d<=goal;d++) dotsHTML+=`<div class="dot ${d<=count?'active':''}"></div>`;
+            dotsHTML+='</div>';
+        }
+        const handleHTML = readonly ? '' : `<span class="hndl" onpointerdown="startDrag(event,${i},'${colKey}')"><svg viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/></svg></span>`;
+        li.innerHTML = `<div class="${btnClass}" onclick="tglItem(${i},'${colKey}')">${icon}</div><div class="inp-wrap"><input type="text" value="${cleanText.replace(/"/g,'&quot;')}" oninput="updItem(${i},this.value,'${colKey}')" onkeydown="onTaskKey(event,${i},'${colKey}')" onblur="onTaskBlur(${i},'${colKey}')" class="${item.s==2?'done':''}" ${readonly?'readonly':''}>${dotsHTML}</div><div class="ctrls"><span class="dots" onclick="openM(${i},'${colKey}')">&#8942;</span>${handleHTML}</div>`;
+        return li;
+    }
+
+    /* ═══════════════════════════════════════════
+       BUILD LEDGER CONTENTS
+    ═══════════════════════════════════════════ */
+    function buildLedgerContents(containerEl, focusEntry) {
+        containerEl.innerHTML = '';
+        if(focusEntry) {
+            const hasTasks = focusEntry.tasks.some(t=>t.t.trim()!=='');
+            if(!hasTasks) {
+                containerEl.innerHTML=`<div style="padding:30px 24px;font-family:'Cormorant Garamond',serif;font-size:16px;color:rgba(0,0,0,0.35);letter-spacing:1px;">No tasks recorded.</div>`;
+                return;
+            }
+            focusEntry.tasks.forEach(item=>{
+                if(!item.t.trim()) return;
+                const row=document.createElement('div');
+                row.className='ledger-item';
+                const dot = item.s===2?'&#10005;':(item.s===3?'&#8594;':'&middot;');
+                row.innerHTML=`<div style="width:24px;text-align:center;font-family:sans-serif;font-size:15px;color:rgba(0,0,0,0.28);flex-shrink:0;">${dot}</div><div style="flex:1;font-size:26px;padding:0 12px;">${item.t.replace(/\(\d+\)/g,'').trim()}</div>`;
+                containerEl.appendChild(row);
             });
             return;
         }
-
-        const data = arcFocus ? arcFocus.tasks : db[v];
-        const title = arcFocus ? 'Historical' : v.charAt(0).toUpperCase() + v.slice(1);
-        let sub = arcFocus ? arcFocus.d : (cur === 0 ? todayShort : (cur === 1 ? "Priority" : "Ideas"));
-
-        el.innerHTML = `<div class="hdr"><b>${title}</b><span>${sub}</span></div><ul id="list" class="${cur===0?'today-list':''}"></ul><div id="btn-container"></div>`;
-        updateTodayButton();
-
-        const list = document.getElementById('list');
-        const arrowSVG = `<svg class="del-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="12" x2="17" y2="12"></line><polyline points="12 7 17 12 12 17"></polyline></svg>`;
-        
-        data.forEach((item, i) => {
-            let li = document.createElement('li'); li.dataset.idx = i;
-            let btnClass = "btn-c";
-            if (item.s === 1) btnClass += " s-progress";
-            if (item.s === 2) btnClass += " s-done";
-            let icon = item.s === 3 ? arrowSVG : '';
-            const tagMatch = item.t.match(/\((\d+)\)/);
-            const goal = tagMatch ? parseInt(tagMatch[1]) : 0;
-            const cleanText = item.t.replace(/\(\d+\)/g, '').trim();
-            const count = item.c || 0;
-            let dotsHTML = '';
-            if(goal > 0) {
-                dotsHTML = `<div class="tally-hit-zone" onclick="cycleDots(${i})">`;
-                for(let d=1; d<=goal; d++) dotsHTML += `<div class="dot ${d<=count?'active':''}"></div>`;
-                dotsHTML += '</div>';
-            }
-            li.innerHTML = `<div class="${btnClass}" onclick="tgl(${i})">${icon}</div><div class="inp-wrap"><input type="text" value="${cleanText}" oninput="upd(${i},this.value)" class="${item.s==2?'done':''}" ${arcFocus?'readonly':''}>${dotsHTML}</div><div class="ctrls"><span class="dots" onclick="openM(${i})">⋮</span><span class="hndl" onpointerdown="startDrag(event, ${i})">⠿</span></div>`;
-            list.appendChild(li);
+        if(db.archive.length===0) {
+            containerEl.innerHTML=`<div style="padding:40px 24px;text-align:center;font-family:'Cormorant Garamond',serif;font-size:18px;color:rgba(0,0,0,0.35);letter-spacing:1px;">No entries yet.</div>`;
+            return;
+        }
+        const {groups,order}=groupArchiveByMonth(db.archive);
+        const currentMonthKey=getCurrentMonthKey();
+        [...order].reverse().forEach(monthKey=>{
+            const entries=groups[monthKey];
+            const details=document.createElement('details');
+            details.className='month-stack';
+            if(monthKey===currentMonthKey) details.open=true;
+            const summary=document.createElement('summary');
+            summary.innerHTML=`<span>${monthKey}</span><span class="stack-count">${entries.length} day${entries.length!==1?'s':''}</span>`;
+            details.appendChild(summary);
+            [...entries].reverse().forEach(({entry,realIdx})=>{
+                const r=document.createElement('div');
+                r.className='ledger-item';
+                r.innerHTML=`<div class="ledger-date" onclick="viewArc(${realIdx})">${entry.d}</div><div class="ledger-ctrls"><div class="ledger-btn ledger-undo" onclick="undoFin(${realIdx})"><svg viewBox="0 0 24 24" stroke="black" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></div><div class="ledger-btn ledger-del" onclick="delArch(event,${realIdx})"><svg viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke="red"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>`;
+                details.appendChild(r);
+            });
+            containerEl.appendChild(details);
         });
     }
 
-    function cycleDots(idx) { if(arcFocus) return; let v = ['today','next','someday'][cur]; let item = db[v][idx]; const match = item.t.match(/\((\d+)\)/); const goal = match ? parseInt(match[1]) : 0; item.c = (item.c || 0) + 1; if(item.c > goal) item.c = 0; if(item.c === 0) item.s = 0; else if(item.c === goal) item.s = 2; else item.s = 1; save(); render(); }
-    
-    function updateTodayButton() { 
-        const container = document.getElementById('btn-container'); 
-        if(!container || cur !== 0 || arcFocus) { if(container) container.innerHTML = ""; return; } 
-        const hasTasks = db.today.some(x => x.t.trim() !== ""); 
-        container.innerHTML = `<div style="padding:20px; text-align:center;"><button class="fin-btn" onclick="${hasTasks?'fin()':'viewLastArc()'}">${hasTasks?'Commit Day':'Review Ledger'}</button></div>`; 
+    function groupArchiveByMonth(archive) {
+        const groups={},order=[];
+        archive.forEach((entry,realIdx)=>{
+            const key=new Date(entry.d).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+            if(!groups[key]){groups[key]=[];order.push(key);}
+            groups[key].push({entry,realIdx});
+        });
+        return {groups,order};
+    }
+    function getCurrentMonthKey() {
+        return new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
     }
 
-    function upd(i,v) { if(arcFocus) return; let key = ['today','next','someday'][cur]; const tagMatch = db[key][i].t.match(/\(\d+\)/); const tag = tagMatch ? tagMatch[0] : ""; db[key][i].t = tag ? `${v} ${tag}` : v; save(); if(cur === 0) updateTodayButton(); }
-    function startDrag(e, i) { if(arcFocus) return; dragEl = e.target.closest('li'); dragEl.classList.add('dragging'); dragEl.setPointerCapture(e.pointerId); }
-    document.addEventListener('pointermove', e => { if(!dragEl) return; const list = document.getElementById('list'); const items = [...list.querySelectorAll('li:not(.dragging)')]; let next = items.find(s => e.clientY <= s.getBoundingClientRect().top + s.offsetHeight/2); if (next) list.insertBefore(dragEl, next); else list.appendChild(dragEl); });
-    document.addEventListener('pointerup', e => { if(!dragEl) return; dragEl.classList.remove('dragging'); let v = ['today','next','someday'][cur]; db[v] = [...document.querySelectorAll('#list li')].map(li => db[v][li.dataset.idx]); dragEl = null; save(); render(); });
-    function tgl(i) { if(arcFocus) return; let v = ['today','next','someday'][cur]; let item = db[v][i]; item.s = (item.s + 1) % 4; const tagMatch = item.t.match(/\((\d+)\)/); if(tagMatch) { const goal = parseInt(tagMatch[1]); if(item.s === 2) item.c = goal; else if(item.s === 0) item.c = 0; else if(item.s === 1 && (item.c === 0 || item.c === goal)) item.c = 1; } save(); render(); }
-    function viewArc(i) { arcFocus = { tasks: db.archive[i].tasks, d: db.archive[i].d, idx: i }; render(); }
-    function delArch(e, i) { e.stopPropagation(); if(confirm("Delete this entry from the Ledger forever?")) { db.archive.splice(i, 1); save(); render(); } }
-    function viewLastArc() { if(db.archive.length > 0) viewArc(db.archive.length - 1); else alert("No historical data found."); }
+    /* ═══════════════════════════════════════════
+       MOBILE RENDER
+    ═══════════════════════════════════════════ */
+    function render() {
+        if(isDesktop()){renderDesktop();return;}
+        const views=['today','next','someday','ledger'];
+        const v=views[cur];
+        const el=document.getElementById('card');
+        const todayShort=getShortDate(new Date());
+        el.className='card '+(arcFocus?'c-ledger':'c-'+(v==='ledger'?'ledger':v));
 
-    // Feature 2: Share / Copy
-    async function shareTask(text) {
-        if (!text || !text.trim()) return;
-        if (navigator.share) {
-            try { await navigator.share({ text: text.trim() }); } catch(e) { /* cancelled */ }
-        } else {
-            try {
-                await navigator.clipboard.writeText(text.trim());
-                showToast('Copied to clipboard');
-            } catch(e) { alert('Could not copy: ' + text); }
+        if(cur===3&&!arcFocus) {
+            // Attach long press to mobile Ledger heading
+            el.innerHTML=`<div class="hdr"><b id="mob-ledger-title" style="cursor:default;">Ledger</b>${gearSVG}</div><div class="top-rule"></div><div id="ledger-list" style="overflow-y:auto;height:calc(100% - 101px);padding-bottom:40px;"></div>`;
+            attachLongPress(document.getElementById('mob-ledger-title'));
+            buildLedgerContents(document.getElementById('ledger-list'),null);
+            return;
         }
-        closeAll();
+        const data=arcFocus?arcFocus.tasks:db[v];
+        const title=arcFocus?'Historical':v.charAt(0).toUpperCase()+v.slice(1);
+        const sub=arcFocus?arcFocus.d:(cur===0?todayShort:(cur===1?'Priority':'Ideas'));
+        el.innerHTML=`<div class="hdr"><b>${title}</b><span>${sub}</span></div><div class="top-rule"></div><ul id="list" class="${cur===0?'today-list':''}"></ul><div id="btn-container"></div>`;
+        updateTodayButton();
+        const list=document.getElementById('list');
+        data.forEach((item,i)=>list.appendChild(buildTaskRow(item,i,arcFocus?'arc':v,!!arcFocus)));
     }
 
-    function showToast(msg) {
-        let t = document.getElementById('toast');
-        if (!t) {
-            t = document.createElement('div');
-            t.id = 'toast';
-            t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;font-family:sans-serif;font-size:13px;padding:8px 18px;border-radius:20px;z-index:300;pointer-events:none;transition:opacity 0.3s;';
-            document.body.appendChild(t);
-        }
-        t.textContent = msg;
-        t.style.opacity = '1';
-        clearTimeout(t._timer);
-        t._timer = setTimeout(() => { t.style.opacity = '0'; }, 1800);
+    function updateTodayButton() {
+        const c=document.getElementById('btn-container');
+        if(!c||cur!==0||arcFocus){if(c)c.innerHTML='';return;}
+        const has=db.today.some(x=>x.t.trim()!=='');
+        c.innerHTML=`<div style="padding:20px;text-align:center;"><button class="fin-btn" onclick="${has?'fin()':'viewLastArc()'}"> ${has?'Commit Day':'Review Ledger'}</button></div>`;
     }
 
-    function openM(i) {
-        sel = i;
-        const container = document.getElementById('m-options-container');
-        container.innerHTML = '';
-        const addOption = (label, action) => {
-            const div = document.createElement('div');
-            div.className = 'm-item';
-            div.innerText = label;
-            div.onclick = () => mAct(action);
-            container.appendChild(div);
-        };
+    /* ═══════════════════════════════════════════
+       DESKTOP RENDER
+    ═══════════════════════════════════════════ */
+    function renderDesktop() {
+        const todayShort=getShortDate(new Date());
+        const cardDefs=[
+            {id:'dt-today',   key:'today',   title:'Today',   sub:todayShort},
+            {id:'dt-next',    key:'next',    title:'Next',    sub:'Priority'},
+            {id:'dt-someday', key:'someday', title:'Someday', sub:'Ideas'},
+        ];
+        cardDefs.forEach(def=>{
+            const cardEl=document.getElementById(def.id);
+            cardEl.innerHTML='';
+            const hdr=document.createElement('div');
+            hdr.className='dt-hdr';
+            hdr.innerHTML=`<div class="dt-hdr-top"><b>${def.title}</b><span>${def.sub}</span></div>`;
+            cardEl.appendChild(hdr);
+            const rule=document.createElement('div');
+            rule.className='dt-rule';
+            cardEl.appendChild(rule);
+            const body=document.createElement('div');
+            body.className='dt-body';
+            const ul=document.createElement('ul');
+            ul.id=`dt-list-${def.key}`;
+            if(def.key==='today') ul.className='today-list';
+            db[def.key].forEach((item,i)=>ul.appendChild(buildTaskRow(item,i,def.key,false)));
+            body.appendChild(ul);
+            cardEl.appendChild(body);
+            if(def.key==='today') {
+                const wrap=document.createElement('div');
+                wrap.className='dt-fin-wrap'; wrap.id='dt-btn-container';
+                const has=db.today.some(x=>x.t.trim()!=='');
+                wrap.innerHTML=`<button class="fin-btn" onclick="${has?'fin()':'viewLastArc()'}"> ${has?'Commit Day':'Review Ledger'}</button>`;
+                cardEl.appendChild(wrap);
+            }
+        });
+        if(dtLedgerOpen) renderDrawer();
+        dtHighlightFocus();
+    }
+
+    function renderDrawer() {
+        const body=document.getElementById('dt-drawer-body');
+        const banner=document.getElementById('dt-arc-banner');
         if(arcFocus) {
-            addOption("Restore to Today", "today");
-            addOption("Move to Next", "next");
+            banner.classList.add('visible');
+            document.getElementById('dt-arc-date').textContent=arcFocus.d;
         } else {
-            const v = ['today', 'next', 'someday'][cur];
-            if(v !== 'today') addOption("Move to Today", "today");
-            if(v !== 'next') addOption("Move to Next", "next");
-            if(v !== 'someday') addOption("Move to Someday", "someday");
-            addOption("Remove Entry", "del");
+            banner.classList.remove('visible');
         }
-        // Share/Copy option
-        const src = arcFocus ? arcFocus.tasks : db[['today', 'next', 'someday'][cur]];
-        const taskText = src[i] ? src[i].t.replace(/\(\d+\)/g, '').trim() : '';
-        if (taskText) {
-            const shareDiv = document.createElement('div');
-            shareDiv.className = 'm-item';
-            shareDiv.innerText = navigator.share ? 'Share Task' : 'Copy Task';
-            shareDiv.onclick = () => shareTask(taskText);
+        buildLedgerContents(body,arcFocus);
+    }
+
+    /* ═══════════════════════════════════════════
+       KEYBOARD NAV
+    ═══════════════════════════════════════════ */
+    function dtHighlightFocus() {
+        document.querySelectorAll('li.kb-focus').forEach(el=>el.classList.remove('kb-focus'));
+        if(!isDesktop()||dtFocusRow<0) return;
+        const ul=document.getElementById(`dt-list-${COLS[dtActiveCol]}`);
+        if(!ul) return;
+        const items=ul.querySelectorAll('li');
+        if(items[dtFocusRow]) {
+            items[dtFocusRow].classList.add('kb-focus');
+            items[dtFocusRow].scrollIntoView({block:'nearest'});
+        }
+    }
+
+    document.addEventListener('keydown', e=>{
+        if(!isDesktop()) return;
+        if(e.target.tagName==='INPUT'&&e.key!=='Escape') return;
+        if(e.key==='l'||e.key==='L') { dtLedgerOpen?dtCloseLedger():dtOpenLedger(); return; }
+        if(e.key==='Escape') {
+            if(arcFocus){dtClearArc();return;}
+            if(dtLedgerOpen){dtCloseLedger();return;}
+            return;
+        }
+        if(e.key==='Tab') {
+            e.preventDefault();
+            dtActiveCol=(dtActiveCol+(e.shiftKey?-1:1)+3)%3;
+            dtFocusRow=dtFocusRow<0?0:dtFocusRow;
+            dtHighlightFocus(); return;
+        }
+        if(e.key==='ArrowDown'||e.key==='ArrowUp') {
+            e.preventDefault();
+            const ul=document.getElementById(`dt-list-${COLS[dtActiveCol]}`);
+            if(!ul) return;
+            const count=ul.querySelectorAll('li').length;
+            if(dtFocusRow<0) dtFocusRow=0;
+            else dtFocusRow=e.key==='ArrowDown'?Math.min(dtFocusRow+1,count-1):Math.max(dtFocusRow-1,0);
+            dtHighlightFocus(); return;
+        }
+        if(e.key===' '&&dtFocusRow>=0) {
+            e.preventDefault(); tglItem(dtFocusRow,COLS[dtActiveCol]); return;
+        }
+        if(e.key==='Enter'&&dtFocusRow>=0) {
+            e.preventDefault();
+            const ul=document.getElementById(`dt-list-${COLS[dtActiveCol]}`);
+            if(!ul) return;
+            const inp=ul.querySelectorAll('li')[dtFocusRow]?.querySelector('input');
+            if(inp) inp.focus(); return;
+        }
+    });
+
+    /* ═══════════════════════════════════════════
+       DESKTOP LEDGER DRAWER
+    ═══════════════════════════════════════════ */
+    function dtOpenLedger() {
+        dtLedgerOpen=true; arcFocus=null;
+        document.getElementById('dt-drawer').classList.add('open');
+        document.getElementById('dt-keys').classList.add('drawer-open');
+        renderDrawer();
+    }
+    function dtCloseLedger() {
+        dtLedgerOpen=false; arcFocus=null;
+        document.getElementById('dt-drawer').classList.remove('open');
+        document.getElementById('dt-keys').classList.remove('drawer-open');
+        document.getElementById('dt-arc-banner').classList.remove('visible');
+    }
+    function dtClearArc() { arcFocus=null; renderDrawer(); }
+
+    /* ═══════════════════════════════════════════
+       TASK ACTIONS
+    ═══════════════════════════════════════════ */
+    function tglItem(i,colKey) {
+        if(colKey==='arc') return;
+        const item=db[colKey][i];
+        item.s=(item.s+1)%4;
+        const tagMatch=item.t.match(/\((\d+)\)/);
+        if(tagMatch) {
+            const goal=parseInt(tagMatch[1]);
+            if(item.s===2) item.c=goal;
+            else if(item.s===0) item.c=0;
+            else if(item.s===1&&(item.c===0||item.c===goal)) item.c=1;
+        }
+        touchTask(item);
+        save(); render();
+    }
+    function tgl(i) { tglItem(i,arcFocus?'arc':['today','next','someday'][cur]); }
+
+    function updItem(i,v,colKey) {
+        if(colKey==='arc') return;
+        const tagMatch=db[colKey][i].t.match(/\(\d+\)/);
+        const tag=tagMatch?tagMatch[0]:'';
+        db[colKey][i].t=tag?`${v} ${tag}`:v;
+        touchTask(db[colKey][i]);
+        save();
+        if(isDesktop()&&colKey==='today') {
+            const wrap=document.getElementById('dt-btn-container');
+            if(wrap) {
+                const has=db.today.some(x=>x.t.trim()!=='');
+                wrap.innerHTML=`<button class="fin-btn" onclick="${has?'fin()':'viewLastArc()'}"> ${has?'Commit Day':'Review Ledger'}</button>`;
+            }
+        }
+        if(!isDesktop()&&cur===0) updateTodayButton();
+    }
+    function upd(i,v) { updItem(i,v,arcFocus?'arc':['today','next','someday'][cur]); }
+
+    function onTaskKey(e,i,colKey) {
+        if(e.key!=='Enter') return;
+        e.preventDefault();
+        const listId=isDesktop()?`dt-list-${colKey}`:'list';
+        const list=document.getElementById(listId);
+        if(!list) return;
+        const inputs=[...list.querySelectorAll('input')];
+        const next=inputs[i+1];
+        if(next) next.focus();
+    }
+
+    function onTaskBlur(i,colKey) {
+        if(colKey==='arc') return;
+        const item=db[colKey]&&db[colKey][i];
+        if(item&&/\(\d+\)/.test(item.t)) render();
+    }
+
+    function cycleDots(idx,colKey) {
+        if(!colKey||colKey==='arc') return;
+        const item=db[colKey][idx];
+        const match=item.t.match(/\((\d+)\)/);
+        const goal=match?parseInt(match[1]):0;
+        item.c=(item.c||0)+1;
+        if(item.c>goal) item.c=0;
+        if(item.c===0) item.s=0; else if(item.c===goal) item.s=2; else item.s=1;
+        touchTask(item);
+        save(); render();
+    }
+
+    /* ═══════════════════════════════════════════
+       DRAG AND DROP
+    ═══════════════════════════════════════════ */
+    let dragSourceCol=null, dragSourceIdx=null, dragOffsetY=0;
+    const ghost=document.getElementById('drag-ghost');
+
+    function startDrag(e,i,colKey) {
+        if(arcFocus) return;
+        const li=e.target.closest('li');
+        const rect=li.getBoundingClientRect();
+        dragSourceCol=colKey; dragSourceIdx=i; dragEl=li;
+        dragOffsetY=e.clientY-rect.top;
+        const taskText=db[colKey][i]?db[colKey][i].t.replace(/\(\d+\)/g,'').trim():'';
+        ghost.textContent=taskText;
+        ghost.style.display='flex';
+        ghost.style.width=rect.width+'px';
+        positionGhost(e.clientX,e.clientY);
+        li.style.opacity='0.3';
+        li.setPointerCapture(e.pointerId);
+        e.preventDefault();
+    }
+
+    function positionGhost(x,y) {
+        const w=ghost.offsetWidth||200;
+        ghost.style.left=(x-w+20)+'px';
+        ghost.style.top=(y-dragOffsetY)+'px';
+    }
+
+    function getDropTarget(x,y) {
+        let targetCol=dragSourceCol;
+        if(isDesktop()) {
+            for(const key of COLS) {
+                const cardEl=document.querySelector(`.dt-card[data-col="${key}"]`);
+                if(!cardEl) continue;
+                const r=cardEl.getBoundingClientRect();
+                if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom){targetCol=key;break;}
+            }
+        }
+        const listId=isDesktop()?`dt-list-${targetCol}`:'list';
+        const list=document.getElementById(listId);
+        if(!list) return {targetCol,list:null,slotIdx:0};
+        const items=[...list.querySelectorAll('li')];
+        let slotIdx=items.length;
+        for(let i=0;i<items.length;i++) {
+            const r=items[i].getBoundingClientRect();
+            if(y<r.top+r.height/2){slotIdx=i;break;}
+        }
+        return {targetCol,list,slotIdx,items};
+    }
+
+    document.addEventListener('pointermove',e=>{
+        if(!dragEl||!ghost) return;
+        positionGhost(e.clientX,e.clientY);
+        document.querySelectorAll('.drop-target-above,.drop-target-below').forEach(el=>{
+            el.classList.remove('drop-target-above','drop-target-below');
+        });
+        COLS.forEach(key=>{
+            const c=document.querySelector(`.dt-card[data-col="${key}"]`);
+            if(c) c.classList.remove('drag-over');
+        });
+        const {targetCol,list,slotIdx,items}=getDropTarget(e.clientX,e.clientY);
+        if(isDesktop()&&targetCol!==dragSourceCol) {
+            const cardEl=document.querySelector(`.dt-card[data-col="${targetCol}"]`);
+            if(cardEl) cardEl.classList.add('drag-over');
+        }
+        if(items&&items.length>0) {
+            if(slotIdx<items.length) items[slotIdx].classList.add('drop-target-above');
+            else items[items.length-1].classList.add('drop-target-below');
+        }
+    });
+
+    document.addEventListener('pointerup',e=>{
+        if(!dragEl) return;
+        ghost.style.display='none';
+        dragEl.style.opacity='';
+        document.querySelectorAll('.drop-target-above,.drop-target-below').forEach(el=>{
+            el.classList.remove('drop-target-above','drop-target-below');
+        });
+        COLS.forEach(key=>{
+            const c=document.querySelector(`.dt-card[data-col="${key}"]`);
+            if(c) c.classList.remove('drag-over');
+        });
+
+        const {targetCol,slotIdx}=getDropTarget(e.clientX,e.clientY);
+        const task=JSON.parse(JSON.stringify(db[dragSourceCol][dragSourceIdx]));
+        touchTask(task);
+
+        if(dragSourceCol===targetCol) {
+            const arr=db[dragSourceCol];
+            const src=dragSourceIdx;
+            const dst=Math.min(slotIdx,arr.length-1);
+            if(src!==dst) { arr.splice(src,1); arr.splice(dst,0,task); }
+        } else {
+            db[dragSourceCol][dragSourceIdx]={t:'',s:0,c:0,u:Date.now()};
+            const targetArr=db[targetCol];
+            const dst=Math.min(slotIdx,targetArr.length-1);
+            const firstEmptyAt=targetArr.findIndex((x,i)=>i>=dst&&x.t.trim()==='');
+            if(firstEmptyAt!==-1) { targetArr.splice(firstEmptyAt,1); targetArr.splice(dst,0,task); }
+            else {
+                const anyEmpty=targetArr.findIndex(x=>x.t.trim()==='');
+                if(anyEmpty!==-1) { targetArr.splice(anyEmpty,1); targetArr.splice(dst,0,task); }
+                else { targetArr.splice(dst,0,task); targetArr.splice(10); }
+            }
+        }
+
+        while(db[dragSourceCol].length<10) db[dragSourceCol].push({t:'',s:0,c:0,u:0});
+        while(db[targetCol].length<10) db[targetCol].push({t:'',s:0,c:0,u:0});
+
+        dragEl=null; dragSourceCol=null; dragSourceIdx=null;
+        save(); render();
+    });
+
+    /* ═══════════════════════════════════════════
+       CONTEXT MENU
+    ═══════════════════════════════════════════ */
+    let menuColKey=null;
+    function openM(i,colKey) {
+        sel=i;
+        menuColKey=colKey||(arcFocus?'arc':['today','next','someday'][cur]);
+        const container=document.getElementById('m-options-container');
+        container.innerHTML='';
+        const add=(label,action)=>{
+            const div=document.createElement('div');
+            div.className='m-item'; div.innerText=label;
+            div.onclick=()=>mAct(action); container.appendChild(div);
+        };
+        const isArc=arcFocus||menuColKey==='arc';
+        if(isArc){add('Restore to Today','today');add('Move to Next','next');}
+        else {
+            if(menuColKey!=='today') add('Move to Today','today');
+            if(menuColKey!=='next') add('Move to Next','next');
+            if(menuColKey!=='someday') add('Move to Someday','someday');
+            add('Remove Entry','del');
+        }
+        const src=isArc?arcFocus.tasks:db[menuColKey];
+        const taskText=src[i]?src[i].t.replace(/\(\d+\)/g,'').trim():'';
+        if(taskText) {
+            const shareDiv=document.createElement('div');
+            shareDiv.className='m-item';
+            shareDiv.innerText=navigator.share?'Share Task':'Copy Task';
+            shareDiv.onclick=()=>shareTask(taskText);
             container.appendChild(shareDiv);
         }
         document.getElementById('menu').classList.add('open');
-        document.getElementById('ov').style.display = 'block';
+        document.getElementById('ov').style.display='block';
+    }
+    function mAct(a) {
+        const isArc=arcFocus||menuColKey==='arc';
+        const src=isArc?arcFocus.tasks:db[menuColKey];
+        if(a==='del') { src[sel]={t:'',s:0,c:0,u:Date.now()}; }
+        else {
+            const ti=db[a].findIndex(x=>x.t.trim()==='');
+            const newTask=JSON.parse(JSON.stringify(src[sel]));
+            touchTask(newTask);
+            if(ti!==-1) db[a][ti]=newTask; else db[a].push(newTask);
+            if(isArc) src[sel].s=3; else src[sel]={t:'',s:0,c:0,u:Date.now()};
+        }
+        save(); render(); closeAll();
     }
 
-    function mAct(a) { let src = arcFocus ? arcFocus.tasks : db[['today', 'next', 'someday'][cur]]; if (a === 'del') { src[sel] = {t:"", s:0, c:0}; } else { let ti = db[a].findIndex(x => x.t.trim() === ""); let newTask = JSON.parse(JSON.stringify(src[sel])); if(ti !== -1) db[a][ti] = newTask; else db[a].push(newTask); if(arcFocus) { src[sel].s = 3; } else { src[sel] = {t:"", s:0, c:0}; } } save(); render(); closeAll(); }
-    function fin() { if(!confirm("Commit today to the Ledger? Unfinished tasks will migrate forward.")) return; const todayStr = getShortDate(new Date()); db.archive.push({d: todayStr, tasks: JSON.parse(JSON.stringify(db.today))}); const migrated = db.today.filter(t => (t.s === 1 || t.s === 3) && t.t.trim() !== ""); db.today = Array(10).fill().map(()=>({t:"", s:0, c:0})); migrated.forEach((t, i) => { if(i < 10) db.today[i] = JSON.parse(JSON.stringify(t)); }); save(); render(); }
-    function undoFin(idx) { if(!confirm("Restore tasks from this Ledger entry?")) return; let card = db.archive[idx]; card.tasks.forEach(task => { if(task.t.trim() !== "") { let emptyIdx = db.today.findIndex(t => t.t.trim() === ""); if (emptyIdx !== -1) db.today[emptyIdx] = JSON.parse(JSON.stringify(task)); else db.today.push(JSON.parse(JSON.stringify(task))); } }); save(); cur = 0; arcFocus = null; render(); }
-    function openSettings() { document.getElementById('settings-menu').classList.add('open'); document.getElementById('ov').style.display='block'; }
-    function closeAll() { document.getElementById('menu').classList.remove('open'); document.getElementById('settings-menu').classList.remove('open'); document.getElementById('ov').style.display='none'; }
-
-    // Feature 3: Backup tracking
-    function checkBackupStatus() {
-        const lastBackup = localStorage.getItem(STORAGE_KEY + '_lastBackup');
-        if (!lastBackup) {
-            localStorage.setItem(STORAGE_KEY + '_lastBackup', Date.now().toString());
-            return;
+    /* ═══════════════════════════════════════════
+       LEDGER ACTIONS
+    ═══════════════════════════════════════════ */
+    function viewArc(i) {
+        arcFocus={tasks:db.archive[i].tasks,d:db.archive[i].d,idx:i};
+        if(isDesktop()) {
+            if(!dtLedgerOpen) dtOpenLedger(); else renderDrawer();
+        } else {
+            const el=document.getElementById('card');
+            el.className='card c-ledger';
+            el.innerHTML=`<div class="hdr"><b>Historical</b><span>${arcFocus.d}</span></div><div class="top-rule"></div><ul id="list"></ul>`;
+            const list=document.getElementById('list');
+            arcFocus.tasks.forEach((item,i)=>list.appendChild(buildTaskRow(item,i,'arc',true)));
         }
-        const daysSince = (Date.now() - parseInt(lastBackup)) / (1000 * 60 * 60 * 24);
-        if (daysSince > 7) {
+    }
+    function delArch(e,i) {
+        e.stopPropagation();
+        if(!confirm('Delete this entry from the Ledger forever?')) return;
+        db.archive.splice(i,1); save();
+        if(isDesktop()&&dtLedgerOpen){arcFocus=null;renderDrawer();}
+        else render();
+    }
+    function viewLastArc() {
+        if(db.archive.length>0) viewArc(db.archive.length-1);
+        else alert('No historical data found.');
+    }
+    function undoFin(idx) {
+        if(!confirm('Restore tasks from this Ledger entry?')) return;
+        db.archive[idx].tasks.forEach(task=>{
+            if(task.t.trim()!=='') {
+                const ei=db.today.findIndex(t=>t.t.trim()==='');
+                const t=JSON.parse(JSON.stringify(task)); touchTask(t);
+                if(ei!==-1) db.today[ei]=t; else db.today.push(t);
+            }
+        });
+        save();
+        if(isDesktop()){arcFocus=null;renderDesktop();renderDrawer();}
+        else{cur=0;arcFocus=null;render();}
+    }
+    function fin() {
+        if(!confirm('Commit today to the Ledger? Unfinished tasks will migrate forward.')) return;
+        const todayStr=getShortDate(new Date());
+        db.archive.push({d:todayStr,tasks:JSON.parse(JSON.stringify(db.today)),u:Date.now()});
+        const migrated=db.today.filter(t=>(t.s===1||t.s===3)&&t.t.trim()!=='');
+        db.today=Array(10).fill().map(()=>({t:'',s:0,c:0,u:0}));
+        migrated.forEach((t,i)=>{if(i<10){db.today[i]=JSON.parse(JSON.stringify(t));db.today[i].u=Date.now();}});
+        save(); render();
+    }
+
+    /* ── Mobile swipe ── */
+    function jump(dir) {
+        const el=document.getElementById('card');
+        el.style.transform=`translateX(${-dir*100}%)`;
+        setTimeout(()=>{
+            cur=(cur+dir+4)%4; arcFocus=null;
+            el.style.transition='none'; el.style.transform=`translateX(${dir*100}%)`;
+            render();
+            setTimeout(()=>{el.style.transition='transform 0.25s cubic-bezier(0.2,1,0.3,1)';el.style.transform='translateX(0)';},15);
+        },200);
+    }
+    let sX=0;
+    document.addEventListener('touchstart',e=>{sX=e.touches[0].clientX;});
+    document.addEventListener('touchend',e=>{
+        if(isDesktop()) return;
+        const diff=e.changedTouches[0].clientX-sX;
+        if(Math.abs(diff)>70&&!dragEl){
+            if(arcFocus){arcFocus=null;render();return;}
+            jump(diff>0?-1:1);
+        }
+    });
+
+    /* ── Share / Copy ── */
+    async function shareTask(text) {
+        if(!text||!text.trim()) return;
+        closeAll();
+        if(navigator.share) {
+            try{await navigator.share({text:text.trim()});}catch(e){}
+        } else {
+            if(navigator.clipboard&&navigator.clipboard.writeText) {
+                try{await navigator.clipboard.writeText(text.trim());showToast('Copied to clipboard');return;}catch(e){}
+            }
+            try {
+                const ta=document.createElement('textarea');
+                ta.value=text.trim(); ta.style.cssText='position:fixed;top:0;left:0;opacity:0;';
+                document.body.appendChild(ta); ta.focus(); ta.select();
+                document.execCommand('copy'); document.body.removeChild(ta);
+                showToast('Copied to clipboard');
+            } catch(e){showToast('Could not copy');}
+        }
+    }
+    function showToast(msg) {
+        let t=document.getElementById('toast');
+        if(!t){
+            t=document.createElement('div'); t.id='toast';
+            t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;font-family:sans-serif;font-size:13px;padding:8px 18px;border-radius:20px;z-index:9998;pointer-events:none;transition:opacity 0.3s;';
+            document.body.appendChild(t);
+        }
+        t.textContent=msg; t.style.opacity='1';
+        clearTimeout(t._timer);
+        t._timer=setTimeout(()=>{t.style.opacity='0';},1800);
+    }
+
+    /* ── Settings / overlays ── */
+    function openSettings() {
+        document.getElementById('settings-menu').classList.add('open');
+        document.getElementById('ov').style.display='block';
+    }
+    function closeAll() {
+        document.getElementById('menu').classList.remove('open');
+        document.getElementById('settings-menu').classList.remove('open');
+        document.getElementById('ov').style.display='none';
+    }
+
+    /* ── Backup ── */
+    function checkBackupStatus() {
+        const lb=localStorage.getItem(STORAGE_KEY+'_lastBackup');
+        if(!lb){localStorage.setItem(STORAGE_KEY+'_lastBackup',Date.now().toString());return;}
+        if((Date.now()-parseInt(lb))/(1000*60*60*24)>7){
             document.getElementById('backup-banner').classList.add('visible');
             document.body.classList.add('has-banner');
         }
     }
-
     function dismissBanner() {
         document.getElementById('backup-banner').classList.remove('visible');
         document.body.classList.remove('has-banner');
     }
-
     function exportData() {
-        const a = document.createElement('a');
-        a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
-        a.download = "ledger_backup.json";
-        a.click();
-        localStorage.setItem(STORAGE_KEY + '_lastBackup', Date.now().toString());
-        dismissBanner();
-        closeAll();
+        const a=document.createElement('a');
+        a.href='data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(db));
+        a.download='ledger_backup.json'; a.click();
+        localStorage.setItem(STORAGE_KEY+'_lastBackup',Date.now().toString());
+        dismissBanner(); closeAll();
+    }
+    function exportMarkdown() {
+        let md='# Ledger\n\n';
+        db.archive.slice().reverse().forEach(day=>{
+            md+=`## ${day.d}\n`;
+            day.tasks.filter(t=>t.t.trim()!=='').forEach(t=>{
+                md+=`${t.s===2?'[x]':(t.s===3?'[>]':'[ ]')} ${t.t}\n`;
+            });
+            md+='\n';
+        });
+        const a=document.createElement('a');
+        a.href='data:text/markdown;charset=utf-8,'+encodeURIComponent(md);
+        a.download='ledger_history.md'; a.click(); closeAll();
+    }
+    function importData() { document.getElementById('fileInput').click(); }
+    document.getElementById('fileInput').onchange=e=>{
+        const r=new FileReader();
+        r.onload=ev=>{db=JSON.parse(ev.target.result);ensureTimestamps();save();render();closeAll();};
+        r.readAsText(e.target.files[0]);
+    };
+
+    window.addEventListener('resize',()=>render());
+
+    /* ═══════════════════════════════════════════
+       INIT
+    ═══════════════════════════════════════════ */
+    async function init() {
+        checkDayReset();
+        checkBackupStatus();
+        render();
+        await handleAuthRedirect();
+        if (!supaSession) await restoreSession();
     }
 
-    function exportMarkdown() { let md = "# Ledger\n\n"; db.archive.slice().reverse().forEach(day => { md += `## ${day.d}\n`; day.tasks.filter(t=>t.t.trim()!=="").forEach(t => { let p = t.s===2 ? "[x]" : (t.s===3 ? "[>]" : "[ ]"); md += `${p} ${t.t}\n`; }); md += "\n"; }); const a = document.createElement('a'); a.href = "data:text/markdown;charset=utf-8," + encodeURIComponent(md); a.download = "ledger_history.md"; a.click(); closeAll(); }
-    function importData() { document.getElementById('fileInput').click(); }
-    document.getElementById('fileInput').onchange = e => { const reader = new FileReader(); reader.onload = ev => { db = JSON.parse(ev.target.result); save(); render(); closeAll(); }; reader.readAsText(e.target.files[0]); };
-    function jump(dir) { let el = document.getElementById('card'); el.style.transform = `translateX(${-dir * 100}%)`; setTimeout(() => { cur = (cur + dir + 4) % 4; arcFocus = null; el.style.transition = 'none'; el.style.transform = `translateX(${dir * 100}%)`; render(); setTimeout(() => { el.style.transition = 'transform 0.25s cubic-bezier(0.2, 1, 0.3, 1)'; el.style.transform = 'translateX(0)'; }, 15); }, 200); }
-    let sX = 0;
-    document.addEventListener('touchstart', e => sX = e.touches[0].clientX);
-    document.addEventListener('touchend', e => { let diff = e.changedTouches[0].clientX - sX; if(Math.abs(diff) > 70 && !dragEl) { if(arcFocus){ arcFocus=null; render(); return; } jump(diff > 0 ? -1 : 1); } });
-
-    checkDayReset();
-    checkBackupStatus();
-    render();
+    init();
 </script>
 </body>
 </html>
