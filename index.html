@@ -612,17 +612,23 @@
     /* ── Handle magic link token on page load ── */
     async function handleAuthRedirect() {
         const hash = window.location.hash;
-        if (!hash) return;
-        const params = new URLSearchParams(hash.replace('#','?').replace('#','&'));
+        if (!hash || hash.length < 2) return;
+        const params = new URLSearchParams(hash.substring(1));
         const accessToken  = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         if (accessToken && refreshToken) {
             await exchangeToken(accessToken, refreshToken);
-            // Clean the URL
             history.replaceState(null, '', window.location.pathname);
-            showToast('Sync enabled');
             updateSyncUI();
+            // Show loading while we sync
+            const card = document.getElementById('card');
+            if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
+            // First pull (in case another device already has data)
             await syncPull();
+            // Then push this device's local data up immediately
+            await syncPush();
+            showToast('Sync enabled');
+            render();
         }
     }
 
@@ -633,8 +639,10 @@
         if (access && refresh) {
             supaSession = { access_token: access, refresh_token: refresh };
             updateSyncUI();
-            // Pull latest on load
+            // Push local data first, then pull remote and merge
+            await syncPush();
             await syncPull();
+            render();
         }
     }
 
