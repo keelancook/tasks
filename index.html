@@ -1263,7 +1263,11 @@
         r.readAsText(e.target.files[0]);
     };
 
-    window.addEventListener('resize',()=>render());
+    window.addEventListener('resize', () => {
+        // Don't re-render if the keyboard is open (input focused) — it causes the keyboard to dismiss
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+        render();
+    });
 
     /* ═══════════════════════════════════════════
        INIT
