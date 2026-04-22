@@ -437,21 +437,29 @@
         }
     }
 
+    function getUserIdFromToken(token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.sub;
+        } catch(e) { return null; }
+    }
+
     async function syncPush() {
         if (!supaSession) return;
+        const userId = getUserIdFromToken(supaSession.access_token);
+        if (!userId) { setSyncStatus('error', 'Bad session'); return; }
         setSyncStatus('syncing', 'Syncing…');
         try {
-            // Push all task slots
             const rows = [];
             COLS.forEach(list => {
                 db[list].forEach((task, slot) => {
-                    rows.push({ list, slot, t: task.t, s: task.s, c: task.c, updated_at: task.u||0 });
+                    rows.push({ user_id: userId, list, slot, t: task.t, s: task.s, c: task.c, updated_at: task.u||0 });
                 });
             });
             await supaFetch('/rest/v1/ledger_tasks', 'POST', rows, supaSession.access_token);
 
-            // Push archive entries
             const archiveRows = db.archive.map(entry => ({
+                user_id: userId,
                 day_key: entry.d,
                 tasks: entry.tasks,
                 updated_at: entry.u || 0
@@ -462,22 +470,23 @@
 
             setSyncStatus('synced', 'Synced');
         } catch(e) {
-            // Try refreshing session once
+            console.error('syncPush error:', e);
+            setSyncStatus('error', 'Push failed: ' + e.message.substring(0, 40));
             const refreshed = await refreshSession();
             if (refreshed) {
                 try { await syncPush(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
-            } else {
-                setSyncStatus('error', 'Sync failed');
             }
         }
     }
 
     async function syncPull() {
         if (!supaSession) return;
+        const userId = getUserIdFromToken(supaSession.access_token);
+        if (!userId) return;
         setSyncStatus('syncing', 'Syncing…');
         try {
             const tasks = await supaFetch(
-                '/rest/v1/ledger_tasks?select=list,slot,t,s,c,updated_at&order=slot.asc',
+                `/rest/v1/ledger_tasks?select=list,slot,t,s,c,updated_at&user_id=eq.${userId}&order=slot.asc`,
                 'GET', null, supaSession.access_token
             );
             let changed = false;
@@ -493,7 +502,7 @@
             }
 
             const archive = await supaFetch(
-                '/rest/v1/ledger_archive?select=day_key,tasks,updated_at',
+                `/rest/v1/ledger_archive?select=day_key,tasks,updated_at&user_id=eq.${userId}`,
                 'GET', null, supaSession.access_token
             );
             if (archive && archive.length > 0) {
@@ -521,6 +530,8 @@
 
             setSyncStatus('synced', 'Synced');
         } catch(e) {
+            console.error('syncPull error:', e);
+            setSyncStatus('error', 'Pull failed: ' + e.message.substring(0, 40));
             const refreshed = await refreshSession();
             if (refreshed) {
                 try { await syncPull(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
