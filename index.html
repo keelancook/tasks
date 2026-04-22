@@ -412,9 +412,16 @@
     let syncPushTimer = null;
 
     function scheduleSyncPush() {
-        // Debounce — wait 1.5s after last save before pushing
+        // Debounce — wait 2s after last save, and don't push while user is typing
         clearTimeout(syncPushTimer);
-        syncPushTimer = setTimeout(() => syncPush(), 1500);
+        syncPushTimer = setTimeout(() => {
+            // If an input still has focus, wait a bit longer
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+                scheduleSyncPush();
+                return;
+            }
+            syncPush();
+        }, 2000);
     }
 
     function setSyncStatus(state, label) {
@@ -472,6 +479,7 @@
                 '/rest/v1/ledger_tasks?select=list,slot,t,s,c,updated_at&order=slot.asc',
                 'GET', null, supaSession.access_token
             );
+            let changed = false;
             if (tasks && tasks.length > 0) {
                 tasks.forEach(row => {
                     const local = db[row.list] && db[row.list][row.slot];
@@ -480,6 +488,7 @@
                     const remoteTs = row.updated_at || 0;
                     if (remoteTs > localTs) {
                         db[row.list][row.slot] = { t: row.t, s: row.s, c: row.c, u: remoteTs };
+                        changed = true;
                     }
                 });
             }
@@ -494,18 +503,31 @@
                     const existing = db.archive.find(e => e.d === row.day_key);
                     if (!existing) {
                         db.archive.push({ d: row.day_key, tasks: row.tasks, u: row.updated_at||0 });
+                        changed = true;
                     } else if ((row.updated_at||0) > (existing.u||0)) {
                         existing.tasks = row.tasks;
                         existing.u = row.updated_at||0;
+                        changed = true;
                     }
                 });
-                // Sort archive by date
-                db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
+                if (changed) {
+                    db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
+                }
             }
 
-            save();
+            if (changed) {
+                // Save to localStorage
+                localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
+                localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next));
+                localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
+                localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
+                // Only re-render if no input is currently focused
+                if (!document.activeElement || document.activeElement.tagName !== 'INPUT') {
+                    render();
+                }
+            }
+
             setSyncStatus('synced', 'Synced');
-            render();
         } catch(e) {
             const refreshed = await refreshSession();
             if (refreshed) {
