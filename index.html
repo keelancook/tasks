@@ -281,13 +281,13 @@
     const SUPA_KEY  = 'sb_publishable_1yrXYKJBq8O51o_PFw7HhQ_qMS_R99-';
 
     // Minimal Supabase REST client — no SDK needed
-    async function supaFetch(path, method='GET', body=null, token=null) {
+    async function supaFetch(path, method='GET', body=null, token=null, extra={}) {
         const headers = {
             'apikey': SUPA_KEY,
             'Content-Type': 'application/json',
-            'Prefer': method==='POST' ? 'resolution=merge-duplicates,return=minimal' : 'return=representation'
+            'Authorization': 'Bearer ' + (token || SUPA_KEY),
+            ...extra
         };
-        if (token) headers['Authorization'] = 'Bearer ' + token;
         const res = await fetch(SUPA_URL + path, {
             method, headers,
             body: body ? JSON.stringify(body) : null
@@ -298,6 +298,27 @@
         }
         const text = await res.text();
         return text ? JSON.parse(text) : null;
+    }
+
+    async function supaUpsert(table, rows) {
+        // PostgREST upsert: POST with Prefer header
+        return supaFetch(
+            `/rest/v1/${table}`,
+            'POST',
+            rows,
+            supaSession.access_token,
+            { 'Prefer': 'resolution=merge-duplicates,return=minimal' }
+        );
+    }
+
+    async function supaSelect(table, query) {
+        return supaFetch(
+            `/rest/v1/${table}?${query}`,
+            'GET',
+            null,
+            supaSession.access_token,
+            { 'Prefer': 'return=representation' }
+        );
     }
 
     // Supabase Auth helpers
@@ -454,25 +475,34 @@
             const rows = [];
             COLS.forEach(list => {
                 db[list].forEach((task, slot) => {
-                    rows.push({ user_id: userId, list, slot, t: task.t, s: task.s, c: task.c, updated_at: task.u||0 });
+                    rows.push({
+                        user_id: userId,
+                        list,
+                        slot,
+                        t: task.t,
+                        s: task.s,
+                        c: task.c,
+                        updated_at: task.u || 0
+                    });
                 });
             });
-            await supaFetch('/rest/v1/ledger_tasks', 'POST', rows, supaSession.access_token);
+            await supaUpsert('ledger_tasks', rows);
 
-            const archiveRows = db.archive.map(entry => ({
-                user_id: userId,
-                day_key: entry.d,
-                tasks: entry.tasks,
-                updated_at: entry.u || 0
-            }));
-            if (archiveRows.length > 0) {
-                await supaFetch('/rest/v1/ledger_archive', 'POST', archiveRows, supaSession.access_token);
+            if (db.archive.length > 0) {
+                const archiveRows = db.archive.map(entry => ({
+                    user_id: userId,
+                    day_key: entry.d,
+                    tasks: entry.tasks,
+                    updated_at: entry.u || 0
+                }));
+                await supaUpsert('ledger_archive', archiveRows);
             }
 
             setSyncStatus('synced', 'Synced');
         } catch(e) {
             console.error('syncPush error:', e);
-            setSyncStatus('error', 'Push failed: ' + e.message.substring(0, 40));
+            setSyncStatus('error', 'Push failed');
+            showToast('Push failed: ' + e.message.substring(0, 60));
             const refreshed = await refreshSession();
             if (refreshed) {
                 try { await syncPush(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
@@ -486,9 +516,8 @@
         if (!userId) return;
         setSyncStatus('syncing', 'Syncing…');
         try {
-            const tasks = await supaFetch(
-                `/rest/v1/ledger_tasks?select=list,slot,t,s,c,updated_at&user_id=eq.${userId}&order=slot.asc`,
-                'GET', null, supaSession.access_token
+            const tasks = await supaSelect('ledger_tasks',
+                `select=list,slot,t,s,c,updated_at&user_id=eq.${userId}&order=slot.asc`
             );
             let changed = false;
             if (tasks && tasks.length > 0) {
@@ -502,9 +531,8 @@
                 });
             }
 
-            const archive = await supaFetch(
-                `/rest/v1/ledger_archive?select=day_key,tasks,updated_at&user_id=eq.${userId}`,
-                'GET', null, supaSession.access_token
+            const archive = await supaSelect('ledger_archive',
+                `select=day_key,tasks,updated_at&user_id=eq.${userId}`
             );
             if (archive && archive.length > 0) {
                 archive.forEach(row => {
