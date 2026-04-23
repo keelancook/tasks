@@ -287,6 +287,8 @@
         <div class="m-item" onclick="exportData()">Backup System (JSON)</div>
         <div class="m-item" onclick="importData()">Restore System (JSON)</div>
         <div id="sync-settings-item" class="m-item" style="display:none;" onclick="forcePush();closeAll();">Push Data to Cloud</div>
+        <div id="sync-pull-item" class="m-item" style="display:none;" onclick="forcePull();closeAll();">Pull Data from Cloud</div>
+        <div id="sync-overwrite-item" class="m-item" style="display:none;color:#991b1b;" onclick="forceOverwrite();">Restore from Cloud</div>
         <div id="sync-signout-item" class="m-item" style="display:none;" onclick="signOut()">Sign Out of Sync</div>
         <div class="m-item" style="opacity:0.5;" onclick="closeAll()">Close</div>
     </div>
@@ -680,11 +682,73 @@
         await syncPush();
     }
 
+    async function forcePull() {
+        if (!supaSession) { showToast('Not signed in to sync'); return; }
+        showToast('Pulling data…');
+        await syncPull();
+        render();
+        showToast('Pull complete');
+    }
+
+    async function forceOverwrite() {
+        if (!supaSession) { showToast('Not signed in to sync'); return; }
+        if (!confirm('Overwrite all local data with cloud data? This cannot be undone.')) return;
+        const userId = getUserIdFromToken(supaSession.access_token);
+        if (!userId) { showToast('Bad session'); return; }
+        setSyncStatus('syncing', 'Syncing…');
+        try {
+            const tasks = await supaSelect('ledger_tasks',
+                `select=list,slot,t,s,c,updated_at&user_id=eq.${userId}&order=slot.asc`
+            );
+            let applied = 0;
+            if (tasks && tasks.length > 0) {
+                tasks.forEach(row => {
+                    if (!db[row.list] || row.slot < 0 || row.slot > 9) return;
+                    db[row.list][row.slot] = { t: row.t, s: row.s, c: row.c, u: row.updated_at || 0 };
+                    if ((row.t || '').trim() !== '') applied++;
+                });
+            }
+            const archive = await supaSelect('ledger_archive',
+                `select=day_key,tasks,updated_at&user_id=eq.${userId}`
+            );
+            let archiveApplied = 0;
+            if (archive && archive.length > 0) {
+                archive.forEach(row => {
+                    const existing = db.archive.find(e => e.d === row.day_key);
+                    if (!existing) {
+                        db.archive.push({ d: row.day_key, tasks: row.tasks, u: row.updated_at || 0 });
+                    } else {
+                        existing.tasks = row.tasks;
+                        existing.u = row.updated_at || 0;
+                    }
+                    archiveApplied++;
+                });
+                db.archive.sort((a, b) => new Date(a.d) - new Date(b.d));
+            }
+            localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
+            localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next));
+            localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
+            localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
+            setSyncStatus('synced', 'Synced');
+            showToast(`Restored ${applied} tasks, ${archiveApplied} archive entries`);
+            render();
+        } catch(e) {
+            console.error('forceOverwrite error:', e.message);
+            showDebugError(e.message);
+            setSyncStatus('error', 'Pull failed');
+        }
+    }
+
     function updateSyncUI() {
-        const push = document.getElementById('sync-settings-item');
-        const out  = document.getElementById('sync-signout-item');
-        if (push) push.style.display = supaSession ? 'block' : 'none';
-        if (out)  out.style.display  = supaSession ? 'block' : 'none';
+        const push      = document.getElementById('sync-settings-item');
+        const pull      = document.getElementById('sync-pull-item');
+        const overwrite = document.getElementById('sync-overwrite-item');
+        const out       = document.getElementById('sync-signout-item');
+        const show = supaSession ? 'block' : 'none';
+        if (push)      push.style.display      = show;
+        if (pull)      pull.style.display      = show;
+        if (overwrite) overwrite.style.display = show;
+        if (out)       out.style.display       = show;
     }
 
     function signOut() {
