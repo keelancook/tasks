@@ -3,6 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Ledger">
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192.png">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -505,9 +512,15 @@
         setSyncStatus('syncing', 'Syncing…');
         try {
             // Build rows, deduplicate by list+slot keeping highest updated_at
+            // Stamp tasks that have no timestamp with now so future merges work
+            const now = Date.now();
             const rowMap = new Map();
             COLS.forEach(list => {
                 db[list].slice(0, 10).forEach((task, slot) => {
+                    // If task has content but no timestamp, give it one now
+                    if ((task.t || '').trim() !== '' && !task.u) {
+                        task.u = now;
+                    }
                     const key = `${list}:${slot}`;
                     const existing = rowMap.get(key);
                     const row = {
@@ -571,8 +584,13 @@
                 tasks.forEach(row => {
                     const local = db[row.list] && db[row.list][row.slot];
                     if (!local) return;
-                    if ((row.updated_at||0) > (local.u||0)) {
-                        db[row.list][row.slot] = { t: row.t, s: row.s, c: row.c, u: row.updated_at||0 };
+                    const localTs = local.u || 0;
+                    const remoteTs = row.updated_at || 0;
+                    const remoteHasContent = (row.t || '').trim() !== '';
+                    const localHasContent  = (local.t || '').trim() !== '';
+                    // Remote wins if: newer timestamp, OR same timestamp but remote has content and local doesn't
+                    if (remoteTs > localTs || (remoteTs === localTs && remoteHasContent && !localHasContent)) {
+                        db[row.list][row.slot] = { t: row.t, s: row.s, c: row.c, u: remoteTs };
                         changed = true;
                     }
                 });
@@ -785,20 +803,19 @@
     ═══════════════════════════════════════════ */
     function buildLedgerContents(containerEl, focusEntry) {
         containerEl.innerHTML = '';
-        if(focusEntry) {
-            const hasTasks = focusEntry.tasks.some(t=>t.t.trim()!=='');
-            if(!hasTasks) {
-                containerEl.innerHTML=`<div style="padding:30px 24px;font-family:'Cormorant Garamond',serif;font-size:16px;color:rgba(0,0,0,0.35);letter-spacing:1px;">No tasks recorded.</div>`;
+        if (focusEntry) {
+            const hasTasks = focusEntry.tasks.some(t => t.t.trim() !== '');
+            if (!hasTasks) {
+                containerEl.innerHTML = `<div style="padding:30px 24px;font-family:'Cormorant Garamond',serif;font-size:16px;color:rgba(0,0,0,0.35);letter-spacing:1px;">No tasks recorded.</div>`;
                 return;
             }
-            focusEntry.tasks.forEach(item=>{
-                if(!item.t.trim()) return;
-                const row=document.createElement('div');
-                row.className='ledger-item';
-                const dot = item.s===2?'&#10005;':(item.s===3?'&#8594;':'&middot;');
-                row.innerHTML=`<div style="width:24px;text-align:center;font-family:sans-serif;font-size:15px;color:rgba(0,0,0,0.28);flex-shrink:0;">${dot}</div><div style="flex:1;font-size:26px;padding:0 12px;">${item.t.replace(/\(\d+\)/g,'').trim()}</div>`;
-                containerEl.appendChild(row);
+            const ul = document.createElement('ul');
+            // Use the real index from focusEntry.tasks so openM can look up the right task
+            focusEntry.tasks.forEach((item, realIdx) => {
+                if (!item.t.trim()) return;
+                ul.appendChild(buildTaskRow(item, realIdx, 'arc', true));
             });
+            containerEl.appendChild(ul);
             return;
         }
         if(db.archive.length===0) {
