@@ -305,10 +305,11 @@
         return text ? JSON.parse(text) : null;
     }
 
-    async function supaUpsert(table, rows) {
-        // PostgREST upsert: POST with Prefer header
+    async function supaUpsert(table, rows, conflictCols) {
+        // Specify on_conflict so PostgREST uses the unique constraint, not the uuid primary key
+        const query = `?on_conflict=${conflictCols}`;
         return supaFetch(
-            `/rest/v1/${table}`,
+            `/rest/v1/${table}${query}`,
             'POST',
             rows,
             supaSession.access_token,
@@ -488,7 +489,7 @@
                     });
                 });
             });
-            await supaUpsert('ledger_tasks', rows);
+            await supaUpsert('ledger_tasks', rows, 'user_id,list,slot');
 
             if (db.archive.length > 0) {
                 const archiveRows = db.archive.map(entry => ({
@@ -497,7 +498,7 @@
                     tasks: entry.tasks,
                     updated_at: entry.u || 0
                 }));
-                await supaUpsert('ledger_archive', archiveRows);
+                await supaUpsert('ledger_archive', archiveRows, 'user_id,day_key');
             }
 
             setSyncStatus('synced', 'Synced');
