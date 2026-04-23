@@ -884,11 +884,13 @@
         if (access && refresh) {
             supaSession = { access_token: access, refresh_token: refresh };
             updateSyncUI();
-            // Push local data first, then pull remote and merge
-            await syncPush();
-            await syncPull();
-            render();
             startSyncPoll();
+            // Push and pull in background — don't block the UI
+            setTimeout(async () => {
+                await syncPush();
+                await syncPull();
+                render();
+            }, 500);
         }
     }
 
@@ -1534,12 +1536,11 @@
 
     function startSyncPoll() {
         stopSyncPoll();
-        // Pull from cloud every 30 seconds while app is open
-        syncPollTimer = setInterval(async () => {
+        syncPollTimer = setInterval(() => {
             if (!supaSession) return;
             if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
-            await syncPull();
-            render();
+            // Fire and forget — never block the UI
+            syncPull().then(() => render()).catch(() => {});
         }, 30000);
     }
 
@@ -1548,10 +1549,9 @@
     }
 
     // Also pull immediately when the user returns to the tab/app after being away
-    document.addEventListener('visibilitychange', async () => {
+    document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && supaSession) {
-            await syncPull();
-            render();
+            syncPull().then(() => render()).catch(() => {});
         }
     });
 
@@ -1561,11 +1561,9 @@
     async function init() {
         checkDayReset();
         checkBackupStatus();
-        render();
+        render(); // Render immediately from localStorage — don't wait for sync
         await handleAuthRedirect();
-        if (!supaSession) await restoreSession();
-        // Start polling if we have a session
-        if (supaSession) startSyncPoll();
+        if (!supaSession) restoreSession(); // intentionally not awaited
     }
 
     init();
