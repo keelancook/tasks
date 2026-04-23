@@ -97,7 +97,20 @@
         #sync-indicator.syncing #sync-dot { animation: pulse 1s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-        /* ── Auth modal ── */
+        /* ── Debug error panel ── */
+        #debug-panel {
+            display: none; position: fixed; bottom: 0; left: 0; right: 0;
+            background: #1a1a1a; color: #ff6b6b;
+            font-family: monospace; font-size: 12px; line-height: 1.5;
+            padding: 16px; z-index: 9999; max-height: 40vh; overflow-y: auto;
+            border-top: 2px solid #ff6b6b;
+        }
+        #debug-panel.visible { display: block; }
+        #debug-panel-close {
+            position: absolute; top: 8px; right: 12px;
+            color: #ff6b6b; font-size: 20px; cursor: pointer; font-family: sans-serif;
+        }
+        #debug-msg { user-select: all; -webkit-user-select: all; word-break: break-all; }
         #auth-modal {
             display: none; position: fixed; inset: 0;
             background: rgba(0,0,0,0.6); z-index: 2000;
@@ -272,6 +285,11 @@
     </div>
     <input type="file" id="fileInput" style="display:none" accept=".json">
     <div id="drag-ghost"></div>
+    <div id="debug-panel">
+        <div id="debug-panel-close" onclick="document.getElementById('debug-panel').classList.remove('visible')">&#x2715;</div>
+        <div style="color:#fff;margin-bottom:6px;font-size:11px;letter-spacing:1px;">SYNC ERROR — tap and hold text to copy</div>
+        <div id="debug-msg"></div>
+    </div>
 
 <script>
     /* ═══════════════════════════════════════════
@@ -306,15 +324,22 @@
     }
 
     async function supaUpsert(table, rows, conflictCols) {
-        // Specify on_conflict so PostgREST uses the unique constraint, not the uuid primary key
         const query = `?on_conflict=${conflictCols}`;
-        return supaFetch(
-            `/rest/v1/${table}${query}`,
-            'POST',
-            rows,
-            supaSession.access_token,
-            { 'Prefer': 'resolution=merge-duplicates,return=minimal' }
-        );
+        const url = SUPA_URL + `/rest/v1/${table}${query}`;
+        const headers = {
+            'apikey': SUPA_KEY,
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + supaSession.access_token,
+            'Prefer': 'resolution=merge-duplicates,return=minimal'
+        };
+        const body = JSON.stringify(rows);
+        console.log('UPSERT', table, url);
+        console.log('First row sample:', JSON.stringify(rows[0]));
+        const res = await fetch(url, { method: 'POST', headers, body });
+        const text = await res.text();
+        console.log('Response status:', res.status, 'body:', text);
+        if (!res.ok) throw new Error(`${res.status}: ${text}`);
+        return text ? JSON.parse(text) : null;
     }
 
     async function supaSelect(table, query) {
@@ -503,9 +528,9 @@
 
             setSyncStatus('synced', 'Synced');
         } catch(e) {
-            console.error('syncPush error:', e);
+            console.error('syncPush error:', e.message);
             setSyncStatus('error', 'Push failed');
-            showToast('Push failed: ' + e.message.substring(0, 60));
+            showDebugError(e.message);
             const refreshed = await refreshSession();
             if (refreshed) {
                 try { await syncPush(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
@@ -1266,7 +1291,12 @@
             } catch(e){showToast('Could not copy');}
         }
     }
-    function showToast(msg) {
+    function showDebugError(msg) {
+        const panel = document.getElementById('debug-panel');
+        const msgEl = document.getElementById('debug-msg');
+        msgEl.textContent = msg;
+        panel.classList.add('visible');
+    }
         let t=document.getElementById('toast');
         if(!t){
             t=document.createElement('div'); t.id='toast';
