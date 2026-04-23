@@ -288,6 +288,7 @@
         <div class="m-item" onclick="importData()">Restore System (JSON)</div>
         <div id="sync-settings-item" class="m-item" style="display:none;" onclick="forcePush();closeAll();">Push Data to Cloud</div>
         <div id="sync-pull-item" class="m-item" style="display:none;" onclick="forcePull();closeAll();">Pull Data from Cloud</div>
+        <div id="sync-diag-item" class="m-item" style="display:none;" onclick="diagnosSync();closeAll();">Diagnose Sync</div>
         <div id="sync-overwrite-item" class="m-item" style="display:none;color:#991b1b;" onclick="forceOverwrite();">Restore from Cloud</div>
         <div id="sync-signout-item" class="m-item" style="display:none;" onclick="signOut()">Sign Out of Sync</div>
         <div class="m-item" style="opacity:0.5;" onclick="closeAll()">Close</div>
@@ -333,7 +334,7 @@
     }
 
     async function supaUpsert(table, rows, conflictCols) {
-        const query = `?on_conflict=${conflictCols}`;
+        const query = `?on_conflict=${encodeURIComponent(conflictCols)}`;
         const url = SUPA_URL + `/rest/v1/${table}${query}`;
         const headers = {
             'apikey': SUPA_KEY,
@@ -433,10 +434,19 @@
         lastActiveDate: localStorage.getItem(STORAGE_KEY+'_lastDate')||getShortDate(new Date())
     };
 
-    // Ensure all tasks have timestamps (backwards compat)
+    // Ensure all tasks have timestamps and c field (backwards compat)
     function ensureTimestamps() {
         COLS.forEach(col => {
-            db[col].forEach(task => { if(!task.u) task.u = 0; });
+            db[col].forEach(task => {
+                if (!task.u) task.u = 0;
+                if (task.c === undefined) task.c = 0;
+            });
+        });
+        // Also normalize archive tasks
+        db.archive.forEach(entry => {
+            if (entry.tasks) entry.tasks.forEach(task => {
+                if (task.c === undefined) task.c = 0;
+            });
         });
     }
     ensureTimestamps();
@@ -531,7 +541,7 @@
                         slot:       Number(slot),
                         t:          String(task.t || ''),
                         s:          Number(task.s || 0),
-                        c:          Number(task.c || 0),
+                        c:          Number(task.c || 0),  // always include c, default 0
                         updated_at: Number(task.u || 0)
                     };
                     if (!existing || row.updated_at > existing.updated_at) {
@@ -544,11 +554,13 @@
             await supaUpsert('ledger_tasks', rows, 'user_id,list,slot');
 
             if (db.archive.length > 0) {
-                // Deduplicate by day_key keeping most recent
+                // Deduplicate by day_key — when dates collide keep the entry with more non-empty tasks
                 const archiveMap = new Map();
                 db.archive.forEach(entry => {
                     const existing = archiveMap.get(entry.d);
-                    if (!existing || (entry.u || 0) > (existing.updated_at || 0)) {
+                    const entryCount = (entry.tasks || []).filter(t => (t.t||'').trim() !== '').length;
+                    const existingCount = existing ? (existing.tasks || []).filter(t => (t.t||'').trim() !== '').length : -1;
+                    if (!existing || entryCount > existingCount || (entry.u||0) > (existing.updated_at||0)) {
                         archiveMap.set(entry.d, {
                             user_id:    String(userId),
                             day_key:    String(entry.d),
@@ -690,6 +702,52 @@
         showToast('Pull complete');
     }
 
+    async function diagnosSync() {
+        if (!supaSession) { showToast('Not signed in'); return; }
+        const userId = getUserIdFromToken(supaSession.access_token);
+
+        // Count local non-empty tasks
+        let localCount = 0;
+        const localDetail = [];
+        COLS.forEach(list => {
+            db[list].forEach((task, slot) => {
+                if ((task.t || '').trim() !== '') {
+                    localCount++;
+                    localDetail.push(`${list}[${slot}]: "${task.t.substring(0,20)}" u=${task.u||0}`);
+                }
+            });
+        });
+
+        // Count cloud tasks
+        try {
+            const tasks = await supaSelect('ledger_tasks',
+                `select=list,slot,t,updated_at&user_id=eq.${userId}&order=list.asc,slot.asc`
+            );
+            const cloudCount = tasks ? tasks.filter(r => (r.t||'').trim() !== '').length : 0;
+            const cloudDetail = tasks ? tasks.filter(r => (r.t||'').trim() !== '').map(r =>
+                `${r.list}[${r.slot}]: "${r.t.substring(0,20)}" u=${r.updated_at||0}`
+            ) : [];
+
+            const archive = await supaSelect('ledger_archive',
+                `select=day_key&user_id=eq.${userId}`
+            );
+            const cloudArchive = archive ? archive.length : 0;
+
+            const msg = [
+                `LOCAL: ${localCount} tasks, ${db.archive.length} archive`,
+                `CLOUD: ${cloudCount} tasks, ${cloudArchive} archive`,
+                `--- LOCAL TASKS ---`,
+                ...localDetail,
+                `--- CLOUD TASKS ---`,
+                ...cloudDetail
+            ].join('\n');
+
+            showDebugError(msg);
+        } catch(e) {
+            showDebugError('Diag error: ' + e.message);
+        }
+    }
+
     async function forceOverwrite() {
         if (!supaSession) { showToast('Not signed in to sync'); return; }
         if (!confirm('Overwrite all local data with cloud data? This cannot be undone.')) return;
@@ -742,11 +800,13 @@
     function updateSyncUI() {
         const push      = document.getElementById('sync-settings-item');
         const pull      = document.getElementById('sync-pull-item');
+        const diag      = document.getElementById('sync-diag-item');
         const overwrite = document.getElementById('sync-overwrite-item');
         const out       = document.getElementById('sync-signout-item');
         const show = supaSession ? 'block' : 'none';
         if (push)      push.style.display      = show;
         if (pull)      pull.style.display      = show;
+        if (diag)      diag.style.display      = show;
         if (overwrite) overwrite.style.display = show;
         if (out)       out.style.display       = show;
     }
