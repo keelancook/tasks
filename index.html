@@ -347,7 +347,7 @@
                 headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ refresh_token: refresh })
             });
-            if (!res.ok) { clearSession(); return false; }
+            if (!res.ok) return false; // don't clear session — just report failure
             const data = await res.json();
             await exchangeToken(data.access_token, data.refresh_token);
             return true;
@@ -566,7 +566,7 @@
                 try { await syncPull(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
             } else {
                 setSyncStatus('error', 'Sync failed');
-                clearSession(); updateSyncUI();
+                updateSyncUI();
             }
         }
     }
