@@ -88,21 +88,36 @@
 
         /* ── Sync status indicator ── */
         #sync-indicator {
-            position: fixed; bottom: 16px; right: 16px;
-            font-family: 'Cormorant Garamond', serif; font-size: 13px;
-            letter-spacing: 0.5px; color: rgba(255,255,255,0.35);
+            position: fixed; bottom: 20px; right: 16px;
+            font-family: sans-serif; font-size: 12px; font-weight: 600;
+            letter-spacing: 0.3px;
             display: none; align-items: center; gap: 6px;
             z-index: 50; pointer-events: none;
+            /* Mobile: dark pill like the toast */
+            background: rgba(0,0,0,0.72); color: #fff;
+            padding: 5px 12px; border-radius: 20px;
         }
         #sync-indicator.visible { display: flex; }
-        #sync-indicator.syncing { color: rgba(255,255,255,0.6); }
-        #sync-indicator.error { color: rgba(180,60,60,0.8); }
+        #sync-indicator.syncing { color: rgba(255,255,255,0.85); }
+        #sync-indicator.error { background: rgba(153,27,27,0.9); color: #fff; }
         #sync-dot {
             width: 6px; height: 6px; border-radius: 50%;
             background: currentColor; flex-shrink: 0;
         }
         #sync-indicator.syncing #sync-dot { animation: pulse 1s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        @media (min-width: 900px) {
+            /* Desktop: revert to subtle floating text, no pill needed on dark background */
+            #sync-indicator {
+                background: transparent; padding: 0;
+                border-radius: 0; font-family: 'Cormorant Garamond', serif;
+                font-size: 13px; font-weight: 400; letter-spacing: 0.5px;
+                color: rgba(255,255,255,0.35);
+            }
+            #sync-indicator.syncing { color: rgba(255,255,255,0.6); }
+            #sync-indicator.error { background: transparent; color: rgba(180,60,60,0.8); }
+        }
 
         /* ── Debug error panel ── */
         #debug-panel {
@@ -575,11 +590,15 @@
             setSyncStatus('synced', 'Synced');
         } catch(e) {
             console.error('syncPush error:', e.message);
-            setSyncStatus('error', 'Push failed');
-            showDebugError(e.message);
+            // Try refreshing session before showing error
+            setSyncStatus('syncing', 'Reconnecting…');
             const refreshed = await refreshSession();
             if (refreshed) {
-                try { await syncPush(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
+                try { await syncPush(); }
+                catch(e2) { setSyncStatus('error', 'Sync failed'); showDebugError(e2.message); }
+            } else {
+                setSyncStatus('error', 'Push failed');
+                showDebugError(e.message);
             }
         }
     }
@@ -639,10 +658,12 @@
             setSyncStatus('synced', 'Synced');
         } catch(e) {
             console.error('syncPull error:', e);
-            setSyncStatus('error', 'Pull failed: ' + e.message.substring(0, 40));
+            // Don't show error yet — try refreshing the session first
+            setSyncStatus('syncing', 'Reconnecting…');
             const refreshed = await refreshSession();
             if (refreshed) {
-                try { await syncPull(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
+                try { await syncPull(); }
+                catch(e2) { setSyncStatus('error', 'Sync failed'); }
             } else {
                 setSyncStatus('error', 'Sync failed');
                 updateSyncUI();
