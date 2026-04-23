@@ -332,12 +332,15 @@
             'Authorization': 'Bearer ' + supaSession.access_token,
             'Prefer': 'resolution=merge-duplicates,return=minimal'
         };
-        const body = JSON.stringify(rows);
-        console.log('UPSERT', table, url);
-        console.log('First row sample:', JSON.stringify(rows[0]));
-        const res = await fetch(url, { method: 'POST', headers, body });
+        // Verify all rows have identical keys
+        const firstKeys = Object.keys(rows[0]).sort().join(',');
+        const badRow = rows.find(r => Object.keys(r).sort().join(',') !== firstKeys);
+        if (badRow) {
+            throw new Error(`Key mismatch in ${table}: expected [${firstKeys}] got [${Object.keys(badRow).sort().join(',')}]`);
+        }
+        console.log(`Upserting ${rows.length} rows to ${table}, keys: ${firstKeys}`);
+        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(rows) });
         const text = await res.text();
-        console.log('Response status:', res.status, 'body:', text);
         if (!res.ok) throw new Error(`${res.status}: ${text}`);
         return text ? JSON.parse(text) : null;
     }
@@ -500,28 +503,30 @@
         if (!userId) { setSyncStatus('error', 'Bad session'); return; }
         setSyncStatus('syncing', 'Syncing…');
         try {
+            // Every row must have exactly the same keys — normalize explicitly
             const rows = [];
             COLS.forEach(list => {
                 db[list].forEach((task, slot) => {
                     rows.push({
-                        user_id: userId,
-                        list,
-                        slot,
-                        t: task.t,
-                        s: task.s,
-                        c: task.c,
-                        updated_at: task.u || 0
+                        user_id: String(userId),
+                        list:     String(list),
+                        slot:     Number(slot),
+                        t:        String(task.t || ''),
+                        s:        Number(task.s || 0),
+                        c:        Number(task.c || 0),
+                        updated_at: Number(task.u || 0)
                     });
                 });
             });
+
             await supaUpsert('ledger_tasks', rows, 'user_id,list,slot');
 
             if (db.archive.length > 0) {
                 const archiveRows = db.archive.map(entry => ({
-                    user_id: userId,
-                    day_key: entry.d,
-                    tasks: entry.tasks,
-                    updated_at: entry.u || 0
+                    user_id:    String(userId),
+                    day_key:    String(entry.d),
+                    tasks:      entry.tasks,
+                    updated_at: Number(entry.u || 0)
                 }));
                 await supaUpsert('ledger_archive', archiveRows, 'user_id,day_key');
             }
