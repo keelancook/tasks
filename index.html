@@ -437,12 +437,13 @@
     }
 
     function save() {
+        // Enforce 10-slot maximum on all lists
+        COLS.forEach(col => { if (db[col].length > 10) db[col] = db[col].slice(0, 10); });
         localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
         localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next));
         localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
         localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
         localStorage.setItem(STORAGE_KEY+'_lastDate', db.lastActiveDate);
-        // Only schedule a cloud push if no input is currently focused
         if (supaSession && (!document.activeElement || document.activeElement.tagName !== 'INPUT')) {
             scheduleSyncPush();
         }
@@ -504,16 +505,17 @@
         setSyncStatus('syncing', 'Syncing…');
         try {
             // Every row must have exactly the same keys — normalize explicitly
+            // Only send slots 0-9 to satisfy the check constraint
             const rows = [];
             COLS.forEach(list => {
-                db[list].forEach((task, slot) => {
+                db[list].slice(0, 10).forEach((task, slot) => {
                     rows.push({
-                        user_id: String(userId),
-                        list:     String(list),
-                        slot:     Number(slot),
-                        t:        String(task.t || ''),
-                        s:        Number(task.s || 0),
-                        c:        Number(task.c || 0),
+                        user_id:    String(userId),
+                        list:       String(list),
+                        slot:       Number(slot),
+                        t:          String(task.t || ''),
+                        s:          Number(task.s || 0),
+                        c:          Number(task.c || 0),
                         updated_at: Number(task.u || 0)
                     });
                 });
