@@ -280,6 +280,11 @@
     const SUPA_URL  = 'https://dxplietmqbpncikyhwve.supabase.co';
     const SUPA_KEY  = 'sb_publishable_1yrXYKJBq8O51o_PFw7HhQ_qMS_R99-';
 
+    /* ── Storage keys — defined first so all functions can use them ── */
+    const STORAGE_KEY = 'ledger_db';
+    const OLD_KEY = 'analog_db';
+    const COLS = ['today','next','someday'];
+
     // Minimal Supabase REST client — no SDK needed
     async function supaFetch(path, method='GET', body=null, token=null, extra={}) {
         const headers = {
@@ -368,9 +373,6 @@
     let supaSession = null;
     let syncPending = false;
     let longPressTimer = null;
-
-    const STORAGE_KEY = 'ledger_db', OLD_KEY = 'analog_db';
-    const COLS = ['today','next','someday'];
 
     function getShortDate(d) {
         return `${d.toLocaleDateString('en-US',{month:'short'})} ${d.getDate()}, ${d.getFullYear()}`;
