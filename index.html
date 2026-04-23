@@ -873,6 +873,7 @@
             await syncPush();
             showToast('Sync enabled');
             render();
+            startSyncPoll();
         }
     }
 
@@ -887,6 +888,7 @@
             await syncPush();
             await syncPull();
             render();
+            startSyncPoll();
         }
     }
 
@@ -1521,9 +1523,36 @@
     };
 
     window.addEventListener('resize', () => {
-        // Don't re-render if the keyboard is open (input focused) — it causes the keyboard to dismiss
         if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
         render();
+    });
+
+    /* ═══════════════════════════════════════════
+       BACKGROUND SYNC POLL
+    ═══════════════════════════════════════════ */
+    let syncPollTimer = null;
+
+    function startSyncPoll() {
+        stopSyncPoll();
+        // Pull from cloud every 30 seconds while app is open
+        syncPollTimer = setInterval(async () => {
+            if (!supaSession) return;
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+            await syncPull();
+            render();
+        }, 30000);
+    }
+
+    function stopSyncPoll() {
+        if (syncPollTimer) { clearInterval(syncPollTimer); syncPollTimer = null; }
+    }
+
+    // Also pull immediately when the user returns to the tab/app after being away
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && supaSession) {
+            await syncPull();
+            render();
+        }
     });
 
     /* ═══════════════════════════════════════════
@@ -1535,6 +1564,8 @@
         render();
         await handleAuthRedirect();
         if (!supaSession) await restoreSession();
+        // Start polling if we have a session
+        if (supaSession) startSyncPoll();
     }
 
     init();
