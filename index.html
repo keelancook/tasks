@@ -504,12 +504,13 @@
         if (!userId) { setSyncStatus('error', 'Bad session'); return; }
         setSyncStatus('syncing', 'Syncing…');
         try {
-            // Every row must have exactly the same keys — normalize explicitly
-            // Only send slots 0-9 to satisfy the check constraint
-            const rows = [];
+            // Build rows, deduplicate by list+slot keeping highest updated_at
+            const rowMap = new Map();
             COLS.forEach(list => {
                 db[list].slice(0, 10).forEach((task, slot) => {
-                    rows.push({
+                    const key = `${list}:${slot}`;
+                    const existing = rowMap.get(key);
+                    const row = {
                         user_id:    String(userId),
                         list:       String(list),
                         slot:       Number(slot),
@@ -517,20 +518,31 @@
                         s:          Number(task.s || 0),
                         c:          Number(task.c || 0),
                         updated_at: Number(task.u || 0)
-                    });
+                    };
+                    if (!existing || row.updated_at > existing.updated_at) {
+                        rowMap.set(key, row);
+                    }
                 });
             });
+            const rows = Array.from(rowMap.values());
 
             await supaUpsert('ledger_tasks', rows, 'user_id,list,slot');
 
             if (db.archive.length > 0) {
-                const archiveRows = db.archive.map(entry => ({
-                    user_id:    String(userId),
-                    day_key:    String(entry.d),
-                    tasks:      entry.tasks,
-                    updated_at: Number(entry.u || 0)
-                }));
-                await supaUpsert('ledger_archive', archiveRows, 'user_id,day_key');
+                // Deduplicate by day_key keeping most recent
+                const archiveMap = new Map();
+                db.archive.forEach(entry => {
+                    const existing = archiveMap.get(entry.d);
+                    if (!existing || (entry.u || 0) > (existing.updated_at || 0)) {
+                        archiveMap.set(entry.d, {
+                            user_id:    String(userId),
+                            day_key:    String(entry.d),
+                            tasks:      entry.tasks,
+                            updated_at: Number(entry.u || 0)
+                        });
+                    }
+                });
+                await supaUpsert('ledger_archive', Array.from(archiveMap.values()), 'user_id,day_key');
             }
 
             setSyncStatus('synced', 'Synced');
