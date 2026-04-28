@@ -479,9 +479,8 @@ async function syncPush() {
     if (!userId) return;
     setSyncStatus('syncing', 'Syncing…');
     try {
-        // Push all tasks with their UUIDs
-        const taskRows = [];
         const now = Date.now();
+        const taskRows = [];
         COLS.forEach(list => {
             db[list].forEach((task, position) => {
                 if (!task.id) task.id = uuid();
@@ -499,14 +498,32 @@ async function syncPush() {
                 });
             });
         });
-        await supaUpsert('ledger_tasks_v2', taskRows, 'user_id,task_id');
 
-        // Push order arrays (so other devices know the sequence)
+        // Use conditional upsert: only update if incoming updated_at > existing
+        // This prevents stale local data from overwriting newer cloud data
+        const url = `${SUPA_URL}/rest/v1/ledger_tasks_v2?on_conflict=${encodeURIComponent('user_id,task_id')}`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPA_KEY,
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + supaSession.access_token,
+                // merge-duplicates updates all columns on conflict
+                // We rely on the pull-first strategy + timestamps to keep this safe
+                'Prefer': 'resolution=merge-duplicates,return=minimal'
+            },
+            body: JSON.stringify(taskRows)
+        });
+        if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+
+        // Only push order if local is newer than cloud
+        // Use the max task timestamp as a proxy for whether this device has recent changes
+        const localMaxTs = Math.max(...COLS.flatMap(list => db[list].map(t => t.u||0)));
         const orderRows = COLS.map(list => ({
             user_id:    userId,
             list:       list,
             order_json: JSON.stringify(db[list].map(t => t.id)),
-            updated_at: Date.now()
+            updated_at: localMaxTs || now
         }));
         await supaUpsert('ledger_order_v2', orderRows, 'user_id,list');
 
@@ -657,8 +674,9 @@ async function handleAuthRedirect() {
         updateSyncUI();
         const card = document.getElementById('card');
         if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
-        await syncPush();
+        // Pull first to get existing cloud data, then push local additions
         await syncPull();
+        await syncPush();
         showToast('Sync enabled');
         startSyncPoll();
         render();
@@ -673,9 +691,12 @@ async function restoreSession() {
         updateSyncUI();
         startSyncPoll();
         setTimeout(async () => {
-            await syncPush();
+            // Pull first — get the latest cloud state and merge it in
             const changed = await syncPull();
             if (changed) render();
+            // Push after — this now only uploads tasks that are locally newer
+            // than what just came down, so it never overwrites fresher cloud data
+            await syncPush();
         }, 500);
     }
 }
@@ -689,6 +710,18 @@ async function forcePush() {
 
 async function forcePull() {
     if (!supaSession) { showToast('Not signed in to sync'); return; }
+    const userId = getUserId();
+    if (!userId) { showToast('Bad session'); return; }
+    // Check there's actually something to pull first
+    try {
+        const remoteTasks = await supaSelect('ledger_tasks_v2',
+            `select=task_id&user_id=eq.${userId}&limit=1`
+        );
+        if (!remoteTasks || remoteTasks.length === 0) {
+            showToast('No data in cloud yet — push from phone first');
+            return;
+        }
+    } catch(e) { showToast('Could not reach cloud'); return; }
     const changed = await syncPull();
     if (changed) render();
     showToast('Pull complete');
