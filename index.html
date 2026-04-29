@@ -674,9 +674,8 @@ async function handleAuthRedirect() {
         updateSyncUI();
         const card = document.getElementById('card');
         if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
-        // Pull first to get existing cloud data, then push local additions
+        // Pull cloud data first — don't push until the user makes a change
         await syncPull();
-        await syncPush();
         showToast('Sync enabled');
         startSyncPoll();
         render();
@@ -690,13 +689,11 @@ async function restoreSession() {
         supaSession = { access_token: access, refresh_token: refresh };
         updateSyncUI();
         startSyncPoll();
+        // On load: pull only. Never push on load — pushes happen only when
+        // the user actually makes a change on this device.
         setTimeout(async () => {
-            // Pull first — get the latest cloud state and merge it in
             const changed = await syncPull();
             if (changed) render();
-            // Push after — this now only uploads tasks that are locally newer
-            // than what just came down, so it never overwrites fresher cloud data
-            await syncPush();
         }, 500);
     }
 }
