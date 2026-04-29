@@ -516,16 +516,20 @@ async function syncPush() {
         });
         if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
 
-        // Only push order if local is newer than cloud
-        // Use the max task timestamp as a proxy for whether this device has recent changes
+        // Only push order if this device has actually made changes recently
+        // (indicated by having tasks with recent timestamps)
         const localMaxTs = Math.max(...COLS.flatMap(list => db[list].map(t => t.u||0)));
-        const orderRows = COLS.map(list => ({
-            user_id:    userId,
-            list:       list,
-            order_json: JSON.stringify(db[list].map(t => t.id)),
-            updated_at: localMaxTs || now
-        }));
-        await supaUpsert('ledger_order_v2', orderRows, 'user_id,list');
+        const oneMinuteAgo = now - 60000;
+        if (localMaxTs > oneMinuteAgo || orderDirty) {
+            const orderRows = COLS.map(list => ({
+                user_id:    userId,
+                list:       list,
+                order_json: JSON.stringify(db[list].map(t => t.id)),
+                updated_at: localMaxTs || now
+            }));
+            await supaUpsert('ledger_order_v2', orderRows, 'user_id,list');
+            orderDirty = false;
+        }
 
         // Push archive
         if (db.archive.length > 0) {
@@ -930,6 +934,7 @@ function getCurrentMonthKey() { return new Date().toLocaleDateString('en-US',{mo
    MOBILE RENDER
 ═══════════════════════════════════════ */
 let cur = 0, arcFocus = null, sel = null;
+let orderDirty = false; // true when user has reordered on this device
 
 function render() {
     if (isDesktop()) { renderDesktop(); return; }
@@ -1171,6 +1176,7 @@ document.addEventListener('pointerup', e => {
     while (db[dragSourceCol].length<10) db[dragSourceCol].push(makeEmptySlot());
     while (db[targetCol].length<10) db[targetCol].push(makeEmptySlot());
     dragEl=null; dragSourceCol=null; dragSourceIdx=null;
+    orderDirty = true;
     save(); render();
 });
 
@@ -1201,6 +1207,7 @@ function mAct(a) {
         const ti = db[a].findIndex(x=>x.t.trim()==='');
         if (ti!==-1) db[a][ti]=newTask; else db[a].push(newTask);
         if (isArc) src[sel].s=3; else src[sel]=makeEmptySlot();
+        orderDirty = true;
     }
     save(); render(); closeAll();
 }
