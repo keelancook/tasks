@@ -304,10 +304,11 @@ let db = {
     lastActiveDate: localStorage.getItem(STORAGE_KEY+'_lastDate') || getShortDate(new Date())
 };
 
-// Ensure archive tasks also have ids
+// Ensure all archive entries have tasks with ids, u timestamps, and unique keys
 db.archive.forEach(entry => {
     if (entry.tasks) entry.tasks = addMissingIds(entry.tasks);
     if (!entry.u) entry.u = 0;
+    if (!entry.key) entry.key = `${entry.d}::${entry.u || Date.now()}`;
 });
 
 function touchTask(task) { task.u = Date.now(); }
@@ -329,14 +330,23 @@ function getShortDate(d) {
     return `${d.toLocaleDateString('en-US',{month:'short'})} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
+function makeArchiveKey(dateStr) {
+    // Creates a unique key per commit: "Apr 22, 2025::1745123456789"
+    return `${dateStr}::${Date.now()}`;
+}
+
 function checkDayReset() {
     const todayStr = getShortDate(new Date());
     if (db.lastActiveDate !== todayStr) {
-        db.archive.push({ d: db.lastActiveDate, tasks: JSON.parse(JSON.stringify(db.today)), u: Date.now() });
+        db.archive.push({ d: db.lastActiveDate, key: makeArchiveKey(db.lastActiveDate), tasks: JSON.parse(JSON.stringify(db.today)), u: Date.now() });
         const migrated = db.today.filter(t => (t.s===1||t.s===3) && t.t.trim()!=='');
         db.today = makeList();
         migrated.forEach((t,i) => {
-            if (i < 10) { db.today[i] = JSON.parse(JSON.stringify(t)); db.today[i].u = Date.now(); }
+            if (i < 10) {
+                db.today[i] = JSON.parse(JSON.stringify(t));
+                // Preserve original timestamp — don't stamp with now() here
+                // so that the sync merge can still correctly compare with cloud data
+            }
         });
         db.lastActiveDate = todayStr;
         save();
@@ -484,7 +494,6 @@ async function syncPush() {
         COLS.forEach(list => {
             db[list].forEach((task, position) => {
                 if (!task.id) task.id = uuid();
-                // Stamp content tasks that lack a timestamp
                 if (task.t.trim() !== '' && !task.u) task.u = now;
                 taskRows.push({
                     task_id:    task.id,
@@ -499,26 +508,21 @@ async function syncPush() {
             });
         });
 
-        // Use conditional upsert: only update if incoming updated_at > existing
-        // This prevents stale local data from overwriting newer cloud data
-        const url = `${SUPA_URL}/rest/v1/ledger_tasks_v2?on_conflict=${encodeURIComponent('user_id,task_id')}`;
-        const res = await fetch(url, {
+        const taskUrl = `${SUPA_URL}/rest/v1/ledger_tasks_v2?on_conflict=${encodeURIComponent('user_id,task_id')}`;
+        const taskRes = await fetch(taskUrl, {
             method: 'POST',
             headers: {
                 'apikey': SUPA_KEY,
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' + supaSession.access_token,
-                // merge-duplicates updates all columns on conflict
-                // We rely on the pull-first strategy + timestamps to keep this safe
                 'Prefer': 'resolution=merge-duplicates,return=minimal'
             },
             body: JSON.stringify(taskRows)
         });
-        if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+        if (!taskRes.ok) throw new Error(`tasks: ${taskRes.status}: ${await taskRes.text()}`);
 
-        // Only push order if local is newer than cloud
-        // Use the max task timestamp as a proxy for whether this device has recent changes
-        const localMaxTs = Math.max(...COLS.flatMap(list => db[list].map(t => t.u||0)));
+        // Always push order — it's small and ensures other devices get correct sequence
+        const localMaxTs = Math.max(0, ...COLS.flatMap(list => db[list].map(t => t.u||0)));
         const orderRows = COLS.map(list => ({
             user_id:    userId,
             list:       list,
@@ -526,16 +530,18 @@ async function syncPush() {
             updated_at: localMaxTs || now
         }));
         await supaUpsert('ledger_order_v2', orderRows, 'user_id,list');
+        orderDirty = false;
 
         // Push archive
         if (db.archive.length > 0) {
             const archiveMap = new Map();
             db.archive.forEach(entry => {
-                const existing = archiveMap.get(entry.d);
+                const k = entry.key || entry.d;
+                const existing = archiveMap.get(k);
                 const count = (entry.tasks||[]).filter(t=>t.t.trim()!=='').length;
                 const existCount = existing ? (existing.tasks||[]).filter(t=>t.t.trim()!=='').length : -1;
                 if (!existing || count > existCount || (entry.u||0) > (existing.updated_at||0)) {
-                    archiveMap.set(entry.d, { user_id: userId, day_key: entry.d, tasks: entry.tasks, updated_at: entry.u||0 });
+                    archiveMap.set(k, { user_id: userId, day_key: k, tasks: entry.tasks, updated_at: entry.u||0 });
                 }
             });
             await supaUpsert('ledger_archive', Array.from(archiveMap.values()), 'user_id,day_key');
@@ -543,18 +549,26 @@ async function syncPush() {
 
         setSyncStatus('synced', 'Synced');
     } catch(e) {
-        console.error('syncPush:', e.message);
-        setSyncStatus('syncing', 'Reconnecting…');
+        console.error('syncPush error:', e.message);
+        // Try refreshing session once — but don't loop
         const refreshed = await refreshSession();
         if (refreshed) {
-            try { await syncPush(); } catch(e2) { setSyncStatus('error', 'Sync failed'); }
+            // Retry once with fresh token
+            try {
+                await syncPush();
+            } catch(e2) {
+                console.error('syncPush retry failed:', e2.message);
+                setSyncStatus('error', 'Sync failed');
+                showSyncError(e2.message);
+            }
         } else {
             setSyncStatus('error', 'Sync failed');
+            showSyncError(e.message);
         }
     }
 }
 
-async function syncPull() {
+async function syncPull(force=false) {
     if (!supaSession) return false;
     const userId = getUserId();
     if (!userId) return false;
@@ -562,77 +576,85 @@ async function syncPull() {
     try {
         let changed = false;
 
-        // Pull tasks — keyed by UUID
         const remoteTasks = await supaSelect('ledger_tasks_v2',
             `select=task_id,list,position,t,s,c,updated_at&user_id=eq.${userId}`
         );
-
-        // Pull order arrays
         const remoteOrder = await supaSelect('ledger_order_v2',
             `select=list,order_json,updated_at&user_id=eq.${userId}`
         );
+        const remoteArchive = await supaSelect('ledger_archive',
+            `select=day_key,tasks,updated_at&user_id=eq.${userId}`
+        );
 
         if (remoteTasks && remoteTasks.length > 0) {
-            // Build a map of all known tasks by UUID
             const remoteMap = new Map();
             remoteTasks.forEach(row => remoteMap.set(row.task_id, row));
 
             COLS.forEach(list => {
-                // Build local task map for this list
                 const localMap = new Map();
                 db[list].forEach(task => localMap.set(task.id, task));
 
-                // Merge: for each remote task, apply if newer than local
+                // Merge tasks by UUID — remote wins if newer, or if force=true
                 remoteMap.forEach((row, taskId) => {
                     if (row.list !== list) return;
                     const local = localMap.get(taskId);
                     const remoteTs = row.updated_at || 0;
                     if (!local) {
-                        // New task from remote — add to local map
                         localMap.set(taskId, { id: taskId, t: row.t, s: row.s, c: row.c, u: remoteTs });
                         changed = true;
-                    } else if (remoteTs > (local.u || 0)) {
-                        // Remote is newer — update local
+                    } else if (force || remoteTs > (local.u || 0)) {
                         local.t = row.t; local.s = row.s; local.c = row.c; local.u = remoteTs;
                         changed = true;
                     }
                 });
 
-                // Apply remote order if it exists and is newer
+                // Apply remote order
                 const orderRow = remoteOrder && remoteOrder.find(r => r.list === list);
                 if (orderRow) {
                     try {
                         const remoteIds = JSON.parse(orderRow.order_json);
-                        // Find our local order's timestamp
                         const localOrderTs = db[list].reduce((max, t) => Math.max(max, t.u||0), 0);
-                        if ((orderRow.updated_at||0) >= localOrderTs) {
-                            // Reconstruct list in remote order, filling gaps
+                        if (force || (orderRow.updated_at||0) >= localOrderTs) {
                             const newList = remoteIds.map(id => {
                                 return localMap.get(id) || { id, t:'', s:0, c:0, u:0 };
                             });
-                            // Ensure exactly 10 slots
                             while (newList.length < 10) newList.push(makeEmptySlot());
                             db[list] = newList.slice(0, 10);
                             changed = true;
                         }
                     } catch(e) {}
+                } else if (force) {
+                    // No order row yet — reconstruct list from remote tasks sorted by position
+                    const listTasks = [];
+                    remoteMap.forEach((row, taskId) => {
+                        if (row.list !== list) return;
+                        listTasks.push({ id: taskId, t: row.t, s: row.s, c: row.c, u: row.updated_at||0, _pos: row.position||0 });
+                    });
+                    if (listTasks.length > 0) {
+                        listTasks.sort((a,b) => a._pos - b._pos);
+                        listTasks.forEach(t => delete t._pos);
+                        // Fill remaining slots
+                        while (listTasks.length < 10) listTasks.push(makeEmptySlot());
+                        db[list] = listTasks.slice(0, 10);
+                        changed = true;
+                    }
                 }
             });
         }
 
-        // Pull archive
-        const remoteArchive = await supaSelect('ledger_archive',
-            `select=day_key,tasks,updated_at&user_id=eq.${userId}`
-        );
         if (remoteArchive && remoteArchive.length > 0) {
             remoteArchive.forEach(row => {
-                const existing = db.archive.find(e => e.d === row.day_key);
+                // Match by unique key first, fall back to display date for old entries
+                const existing = db.archive.find(e => (e.key||e.d) === row.day_key);
                 if (!existing) {
-                    db.archive.push({ d: row.day_key, tasks: addMissingIds(row.tasks || []), u: row.updated_at||0 });
+                    // Parse display date from key (format: "Apr 22, 2025::timestamp" or just "Apr 22, 2025")
+                    const displayDate = row.day_key.includes('::') ? row.day_key.split('::')[0] : row.day_key;
+                    db.archive.push({ d: displayDate, key: row.day_key, tasks: addMissingIds(row.tasks || []), u: row.updated_at||0 });
                     changed = true;
-                } else if ((row.updated_at||0) > (existing.u||0)) {
+                } else if (force || (row.updated_at||0) > (existing.u||0)) {
                     existing.tasks = addMissingIds(row.tasks || []);
                     existing.u = row.updated_at||0;
+                    existing.key = row.day_key;
                     changed = true;
                 }
             });
@@ -649,13 +671,18 @@ async function syncPull() {
         setSyncStatus('synced', 'Synced');
         return changed;
     } catch(e) {
-        console.error('syncPull:', e.message);
-        setSyncStatus('syncing', 'Reconnecting…');
+        console.error('syncPull error:', e.message);
         const refreshed = await refreshSession();
         if (refreshed) {
-            try { return await syncPull(); } catch(e2) { setSyncStatus('error', 'Sync failed'); return false; }
+            try { return await syncPull(force); }
+            catch(e2) {
+                setSyncStatus('error', 'Sync failed');
+                showSyncError(e2.message);
+                return false;
+            }
         } else {
             setSyncStatus('error', 'Sync failed');
+            showSyncError(e.message);
             return false;
         }
     }
@@ -674,9 +701,9 @@ async function handleAuthRedirect() {
         updateSyncUI();
         const card = document.getElementById('card');
         if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
-        // Pull first to get existing cloud data, then push local additions
-        await syncPull();
-        await syncPush();
+        // Pull cloud data first, then run day reset with fresh data
+        await syncPull(true);
+        checkDayReset();
         showToast('Sync enabled');
         startSyncPoll();
         render();
@@ -691,13 +718,17 @@ async function restoreSession() {
         updateSyncUI();
         startSyncPoll();
         setTimeout(async () => {
-            // Pull first — get the latest cloud state and merge it in
-            const changed = await syncPull();
-            if (changed) render();
-            // Push after — this now only uploads tasks that are locally newer
-            // than what just came down, so it never overwrites fresher cloud data
-            await syncPush();
+            // Pull first — force apply cloud state
+            const changed = await syncPull(true);
+            // Now run day reset — after we have the freshest cloud data,
+            // so migrated tasks have correct timestamps relative to cloud
+            checkDayReset();
+            render();
         }, 500);
+    } else {
+        // No session — just run day reset normally
+        checkDayReset();
+        render();
     }
 }
 
@@ -762,7 +793,10 @@ async function forceOverwrite() {
         }
         const archive = await supaSelect('ledger_archive', `select=day_key,tasks,updated_at&user_id=eq.${userId}`);
         if (archive) {
-            db.archive = archive.map(r => ({ d: r.day_key, tasks: addMissingIds(r.tasks||[]), u: r.updated_at||0 }));
+            db.archive = archive.map(r => {
+                const displayDate = r.day_key.includes('::') ? r.day_key.split('::')[0] : r.day_key;
+                return { d: displayDate, key: r.day_key, tasks: addMissingIds(r.tasks||[]), u: r.updated_at||0 };
+            });
             db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
         }
         localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
@@ -796,16 +830,26 @@ function signOut() {
 
 /* ── Poll ── */
 let syncPollTimer = null;
+let lastHiddenAt = null;
+
 function startSyncPoll() {
     if (syncPollTimer) clearInterval(syncPollTimer);
     syncPollTimer = setInterval(() => {
         if (!supaSession || (document.activeElement && document.activeElement.tagName === 'INPUT')) return;
-        syncPull().then(changed => { if (changed) render(); }).catch(() => {});
+        syncPull(false).then(changed => { if (changed) render(); }).catch(() => {});
     }, 30000);
 }
+
 document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        lastHiddenAt = Date.now();
+        return;
+    }
     if (document.visibilityState === 'visible' && supaSession) {
-        syncPull().then(changed => { if (changed) render(); }).catch(() => {});
+        // If away for more than 5 minutes, treat like a fresh load — force pull
+        const awayMs = lastHiddenAt ? Date.now() - lastHiddenAt : Infinity;
+        const force = awayMs > 5 * 60 * 1000;
+        syncPull(force).then(changed => { if (changed) render(); }).catch(() => {});
     }
 });
 
@@ -933,6 +977,7 @@ function getCurrentMonthKey() { return new Date().toLocaleDateString('en-US',{mo
    MOBILE RENDER
 ═══════════════════════════════════════ */
 let cur = 0, arcFocus = null, sel = null;
+let orderDirty = false; // true when user has reordered on this device
 
 function render() {
     if (isDesktop()) { renderDesktop(); return; }
@@ -1174,6 +1219,7 @@ document.addEventListener('pointerup', e => {
     while (db[dragSourceCol].length<10) db[dragSourceCol].push(makeEmptySlot());
     while (db[targetCol].length<10) db[targetCol].push(makeEmptySlot());
     dragEl=null; dragSourceCol=null; dragSourceIdx=null;
+    orderDirty = true;
     save(); render();
 });
 
@@ -1204,6 +1250,7 @@ function mAct(a) {
         const ti = db[a].findIndex(x=>x.t.trim()==='');
         if (ti!==-1) db[a][ti]=newTask; else db[a].push(newTask);
         if (isArc) src[sel].s=3; else src[sel]=makeEmptySlot();
+        orderDirty = true;
     }
     save(); render(); closeAll();
 }
@@ -1250,7 +1297,7 @@ function undoFin(idx) {
 function fin() {
     if (!confirm('Commit today to the Ledger? Unfinished tasks will migrate forward.')) return;
     const todayStr = getShortDate(new Date());
-    db.archive.push({ d: todayStr, tasks: JSON.parse(JSON.stringify(db.today)), u: Date.now() });
+    db.archive.push({ d: todayStr, key: makeArchiveKey(todayStr), tasks: JSON.parse(JSON.stringify(db.today)), u: Date.now() });
     const migrated = db.today.filter(t=>(t.s===1||t.s===3)&&t.t.trim()!=='');
     db.today = makeList();
     migrated.forEach((t,i) => { if(i<10){db.today[i]=JSON.parse(JSON.stringify(t));db.today[i].u=Date.now();} });
@@ -1285,6 +1332,23 @@ async function shareTask(text) {
     try { const ta=document.createElement('textarea'); ta.value=text.trim(); ta.style.cssText='position:fixed;top:0;left:0;opacity:0;'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('Copied'); } catch(e){showToast('Could not copy');}
 }
 
+function showSyncError(msg) {
+    const label = document.getElementById('sync-label');
+    const indicator = document.getElementById('sync-indicator');
+    if (label && indicator) {
+        label.textContent = 'Sync failed — tap for details';
+        indicator.style.pointerEvents = 'auto';
+        indicator.style.cursor = 'pointer';
+        indicator.onclick = () => {
+            alert('Sync error:\n\n' + msg);
+            indicator.style.pointerEvents = 'none';
+            indicator.style.cursor = 'default';
+            indicator.onclick = null;
+        };
+    }
+    console.error('SYNC ERROR:', msg);
+}
+
 function showToast(msg) {
     let t=document.getElementById('toast');
     if (!t) { t=document.createElement('div'); t.id='toast'; t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;font-family:sans-serif;font-size:13px;padding:8px 18px;border-radius:20px;z-index:9998;pointer-events:none;transition:opacity 0.3s;'; document.body.appendChild(t); }
@@ -1299,11 +1363,50 @@ function checkBackupStatus() {
     const lb = localStorage.getItem(STORAGE_KEY+'_lastBackup');
     if (!lb) { localStorage.setItem(STORAGE_KEY+'_lastBackup',Date.now().toString()); return; }
     if ((Date.now()-parseInt(lb))/(1000*60*60*24)>7) { document.getElementById('backup-banner').classList.add('visible'); document.body.classList.add('has-banner'); }
+    // Pull shared backup timestamp from cloud to check if another device backed up recently
+    syncBackupTimestamp();
 }
 function dismissBanner() { document.getElementById('backup-banner').classList.remove('visible'); document.body.classList.remove('has-banner'); }
 function exportData() {
     const a=document.createElement('a'); a.href='data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(db)); a.download='ledger_backup.json'; a.click();
-    localStorage.setItem(STORAGE_KEY+'_lastBackup',Date.now().toString()); dismissBanner(); closeAll();
+    const ts = Date.now();
+    localStorage.setItem(STORAGE_KEY+'_lastBackup', ts.toString());
+    dismissBanner(); closeAll();
+    // Push the backup timestamp to cloud so other devices know
+    pushBackupTimestamp(ts);
+}
+
+async function syncBackupTimestamp() {
+    if (!supaSession) return;
+    const userId = getUserId();
+    if (!userId) return;
+    try {
+        const rows = await supaSelect('ledger_order_v2',
+            `select=order_json,updated_at&user_id=eq.${userId}&list=eq.meta_backup`
+        );
+        if (rows && rows.length > 0) {
+            const remoteTs = parseInt(rows[0].order_json) || 0;
+            const localTs  = parseInt(localStorage.getItem(STORAGE_KEY+'_lastBackup')) || 0;
+            if (remoteTs > localTs) {
+                localStorage.setItem(STORAGE_KEY+'_lastBackup', remoteTs.toString());
+                dismissBanner();
+            }
+        }
+    } catch(e) { /* non-critical */ }
+}
+
+async function pushBackupTimestamp(ts) {
+    if (!supaSession) return;
+    const userId = getUserId();
+    if (!userId) return;
+    try {
+        await supaUpsert('ledger_order_v2', [{
+            user_id:    userId,
+            list:       'meta_backup',
+            order_json: ts.toString(),
+            updated_at: ts
+        }], 'user_id,list');
+    } catch(e) { /* non-critical */ }
 }
 function exportMarkdown() {
     let md='# Ledger\n\n';
@@ -1326,7 +1429,6 @@ window.addEventListener('resize', () => {
    INIT
 ═══════════════════════════════════════ */
 async function init() {
-    checkDayReset();
     checkBackupStatus();
     render();
     await handleAuthRedirect();
