@@ -344,13 +344,15 @@ function checkDayReset() {
         migrated.forEach((t,i) => {
             if (i < 10) {
                 db.today[i] = JSON.parse(JSON.stringify(t));
-                // Preserve original timestamp — don't stamp with now() here
-                // so that the sync merge can still correctly compare with cloud data
+                // Stamp migrated tasks with now so they're newer than cloud's old Today tasks
+                db.today[i].u = Date.now();
             }
         });
         db.lastActiveDate = todayStr;
         save();
+        return true; // reset happened
     }
+    return false; // no reset needed
 }
 
 function isDesktop() { return window.innerWidth >= 900; }
@@ -718,15 +720,18 @@ async function restoreSession() {
         updateSyncUI();
         startSyncPoll();
         setTimeout(async () => {
-            // Pull first — force apply cloud state
-            const changed = await syncPull(true);
-            // Now run day reset — after we have the freshest cloud data,
-            // so migrated tasks have correct timestamps relative to cloud
-            checkDayReset();
+            // Pull first to get latest cloud state
+            await syncPull(true);
+            // Run day reset — this may clear Today if the date has changed
+            const wasReset = checkDayReset();
+            if (wasReset) {
+                // Push the fresh Today card immediately so cloud is also updated
+                // and future polls don't restore yesterday's completed tasks
+                await syncPush();
+            }
             render();
         }, 500);
     } else {
-        // No session — just run day reset normally
         checkDayReset();
         render();
     }
