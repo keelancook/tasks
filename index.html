@@ -314,7 +314,7 @@ function saveLocal() {
 /* ─── save = saveLocal + schedule cloud push ─── */
 function save() {
     saveLocal();
-    if (supaSession && !document.activeElement?.tagName === 'INPUT') schedulePush();
+    if (supaSession && document.activeElement?.tagName !== 'INPUT') schedulePush();
 }
 
 /* ─── save while typing — deferred push ─── */
