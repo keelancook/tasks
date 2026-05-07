@@ -312,15 +312,19 @@ function saveLocal() {
 }
 
 /* ─── save = saveLocal + schedule cloud push ─── */
+let lastLocalChange = 0; // timestamp of last user action on this device
+
 function save() {
     saveLocal();
+    lastLocalChange = Date.now();
     if (supaSession && document.activeElement?.tagName !== 'INPUT') schedulePush();
 }
 
 /* ─── save while typing — deferred push ─── */
 function saveTyping() {
     saveLocal();
-    // Push is deferred until blur (onTaskBlur triggers schedulePush)
+    lastLocalChange = Date.now();
+    // Push deferred until blur
 }
 
 /* ═══════════════════════════════════════
@@ -624,6 +628,9 @@ function startPoll() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => {
         if (!supaSession || document.activeElement?.tagName === 'INPUT') return;
+        // Don't pull if this device made changes in the last 10 seconds
+        // — the push may still be in flight and we don't want to overwrite local state
+        if (Date.now() - lastLocalChange < 10000) return;
         doPull().then(changed => { if (changed) render(); }).catch(() => {});
     }, 30000);
 }
@@ -632,8 +639,7 @@ document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { lastHiddenAt = Date.now(); return; }
     if (document.visibilityState === 'visible' && supaSession) {
         const away = lastHiddenAt ? Date.now() - lastHiddenAt : Infinity;
-        if (away > 5 * 60 * 1000) {
-            // Been away over 5 min — pull from cloud and re-render
+        if (away > 5 * 60 * 1000 && Date.now() - lastLocalChange > 10000) {
             doPull().then(changed => { if (changed) render(); }).catch(() => {});
         }
     }
