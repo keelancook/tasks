@@ -332,33 +332,38 @@ function saveTyping() {
 ═══════════════════════════════════════ */
 function checkDayReset() {
     const todayStr = getShortDate(new Date());
-    // Use a device-local key to track whether THIS device has reset today
-    // This is independent of cloud state and of db.lastActiveDate
     const deviceResetKey = STORAGE_KEY + '_device_reset_date';
     const deviceLastReset = localStorage.getItem(deviceResetKey) || '';
-    if (deviceLastReset === todayStr) return false; // already reset on this device today
 
-    // db.lastActiveDate tells us what date was active when we last saved
-    if (db.lastActiveDate === todayStr) {
-        // Date is already today in db — just mark device as reset and skip archive
-        localStorage.setItem(deviceResetKey, todayStr);
-        return false;
+    // Already reset on this device today — nothing to do
+    if (deviceLastReset === todayStr) return false;
+
+    // Mark as reset for today immediately so re-renders don't trigger again
+    localStorage.setItem(deviceResetKey, todayStr);
+
+    // If db has no tasks or lastActiveDate is already today, nothing to archive
+    const hasTasks = db.today.some(t => t.t.trim() !== '');
+    const dateIsToday = db.lastActiveDate === todayStr;
+    if (!hasTasks && dateIsToday) return false;
+
+    // Archive whatever is in Today under yesterday's date (or lastActiveDate)
+    const archiveDate = dateIsToday ? db.lastActiveDate : (db.lastActiveDate || todayStr);
+    if (hasTasks || !dateIsToday) {
+        db.archive.push({
+            d: archiveDate,
+            key: makeArchiveKey(archiveDate),
+            tasks: JSON.parse(JSON.stringify(db.today)),
+            u: Date.now()
+        });
     }
 
-    // Date has changed — archive yesterday's card and build fresh Today
-    db.archive.push({
-        d: db.lastActiveDate,
-        key: makeArchiveKey(db.lastActiveDate),
-        tasks: JSON.parse(JSON.stringify(db.today)),
-        u: Date.now()
-    });
+    // Build fresh Today — carry forward in-progress (s=1) and migrated (s=3) only
     const migrated = db.today.filter(t => (t.s===1||t.s===3) && t.t.trim()!=='');
     db.today = makeList();
     migrated.forEach((t,i) => {
         if (i < 10) db.today[i] = { ...JSON.parse(JSON.stringify(t)), id: t.id || uuid() };
     });
     db.lastActiveDate = todayStr;
-    localStorage.setItem(deviceResetKey, todayStr);
     saveLocal();
     return true;
 }
