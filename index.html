@@ -477,6 +477,7 @@ async function doPush() {
             const seen = new Map();
             db.archive.forEach(e => {
                 const k = e.key || e.d;
+                if (k === 'meta_backup') return; // handled separately
                 const existing = seen.get(k);
                 const count = (e.tasks||[]).filter(t=>t.t.trim()!=='').length;
                 if (!existing || count > (existing._count||0)) {
@@ -539,6 +540,7 @@ async function doPull() {
         // Archive — apply cloud, skip tombstoned entries
         if (archive && archive.length > 0) {
             archive.forEach(row => {
+                if (row.day_key === 'meta_backup') return; // skip backup timestamp marker
                 if (deletedArchiveKeys.has(row.day_key)) return;
                 const displayDate = row.day_key.includes('::') ? row.day_key.split('::')[0] : row.day_key;
                 const existing = db.archive.find(e => (e.key||e.d) === row.day_key);
@@ -733,13 +735,34 @@ async function restoreSession() {
 
 /* ── Backup timestamp sync ── */
 async function syncBackupTimestamp() {
-    // Backup timestamp is stored in localStorage only — cross-device sync via archive table not needed
-    // The banner auto-dismisses when you back up on any device that has sync
+    if (!supaSession) return;
+    const uid = getUserId(); if (!uid) return;
+    try {
+        const rows = await supaSelect('ledger_archive',
+            `select=updated_at&user_id=eq.${uid}&day_key=eq.meta_backup`
+        );
+        if (rows && rows.length > 0) {
+            const remoteTs = rows[0].updated_at || 0;
+            const localTs  = parseInt(localStorage.getItem(STORAGE_KEY+'_lastBackup')) || 0;
+            if (remoteTs > localTs) {
+                localStorage.setItem(STORAGE_KEY+'_lastBackup', remoteTs.toString());
+                dismissBanner();
+            }
+        }
+    } catch(e) { /* non-critical */ }
 }
 
 async function pushBackupTimestamp(ts) {
-    // No-op — backup timestamps are local only for now
-    // The dismiss button handles cross-session persistence locally
+    if (!supaSession) return;
+    const uid = getUserId(); if (!uid) return;
+    try {
+        await supaUpsert('ledger_archive', [{
+            user_id:    uid,
+            day_key:    'meta_backup',
+            tasks:      [],
+            updated_at: ts
+        }], 'user_id,day_key');
+    } catch(e) { /* non-critical */ }
 }
 
 /* ═══════════════════════════════════════
