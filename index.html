@@ -332,23 +332,35 @@ function saveTyping() {
 ═══════════════════════════════════════ */
 function checkDayReset() {
     const todayStr = getShortDate(new Date());
-    if (db.lastActiveDate === todayStr) return false;
-    // Archive yesterday's card with a unique key
+    // Use a device-local key to track whether THIS device has reset today
+    // This is independent of cloud state and of db.lastActiveDate
+    const deviceResetKey = STORAGE_KEY + '_device_reset_date';
+    const deviceLastReset = localStorage.getItem(deviceResetKey) || '';
+    if (deviceLastReset === todayStr) return false; // already reset on this device today
+
+    // db.lastActiveDate tells us what date was active when we last saved
+    if (db.lastActiveDate === todayStr) {
+        // Date is already today in db — just mark device as reset and skip archive
+        localStorage.setItem(deviceResetKey, todayStr);
+        return false;
+    }
+
+    // Date has changed — archive yesterday's card and build fresh Today
     db.archive.push({
         d: db.lastActiveDate,
         key: makeArchiveKey(db.lastActiveDate),
         tasks: JSON.parse(JSON.stringify(db.today)),
         u: Date.now()
     });
-    // Build fresh Today — only carry forward in-progress (s=1) and migrated (s=3)
     const migrated = db.today.filter(t => (t.s===1||t.s===3) && t.t.trim()!=='');
     db.today = makeList();
     migrated.forEach((t,i) => {
         if (i < 10) db.today[i] = { ...JSON.parse(JSON.stringify(t)), id: t.id || uuid() };
     });
     db.lastActiveDate = todayStr;
+    localStorage.setItem(deviceResetKey, todayStr);
     saveLocal();
-    return true; // reset happened — caller should push to cloud
+    return true;
 }
 
 function isDesktop() { return window.innerWidth >= 900; }
@@ -723,13 +735,13 @@ async function restoreSession() {
     }
     supaSession = { access_token: access, refresh_token: refresh };
     updateSyncUI();
-    startPoll();
-    // Delay slightly so the app renders immediately from local first
+    // Delay so app renders from local first, then sync
     setTimeout(async () => {
         const changed = await doPull();
         const wasReset = checkDayReset();
-        if (wasReset) await doPush(); // push fresh Today after reset
+        if (wasReset) await doPush();
         if (changed || wasReset) render();
+        startPoll(); // start poll AFTER initial sequence so it can't interfere
     }, 400);
 }
 
