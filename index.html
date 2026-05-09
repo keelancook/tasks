@@ -330,44 +330,6 @@ function saveTyping() {
 /* ═══════════════════════════════════════
    DAY RESET
 ═══════════════════════════════════════ */
-function checkDayReset() {
-    const todayStr = getShortDate(new Date());
-    const deviceResetKey = STORAGE_KEY + '_device_reset_date';
-    const deviceLastReset = localStorage.getItem(deviceResetKey) || '';
-
-    // Already reset on this device today — nothing to do
-    if (deviceLastReset === todayStr) return false;
-
-    // Mark as reset for today immediately so re-renders don't trigger again
-    localStorage.setItem(deviceResetKey, todayStr);
-
-    // If db has no tasks or lastActiveDate is already today, nothing to archive
-    const hasTasks = db.today.some(t => t.t.trim() !== '');
-    const dateIsToday = db.lastActiveDate === todayStr;
-    if (!hasTasks && dateIsToday) return false;
-
-    // Archive whatever is in Today under yesterday's date (or lastActiveDate)
-    const archiveDate = dateIsToday ? db.lastActiveDate : (db.lastActiveDate || todayStr);
-    if (hasTasks || !dateIsToday) {
-        db.archive.push({
-            d: archiveDate,
-            key: makeArchiveKey(archiveDate),
-            tasks: JSON.parse(JSON.stringify(db.today)),
-            u: Date.now()
-        });
-    }
-
-    // Build fresh Today — carry forward in-progress (s=1) and migrated (s=3) only
-    const migrated = db.today.filter(t => (t.s===1||t.s===3) && t.t.trim()!=='');
-    db.today = makeList();
-    migrated.forEach((t,i) => {
-        if (i < 10) db.today[i] = { ...JSON.parse(JSON.stringify(t)), id: t.id || uuid() };
-    });
-    db.lastActiveDate = todayStr;
-    saveLocal();
-    return true;
-}
-
 function isDesktop() { return window.innerWidth >= 900; }
 
 /* ═══════════════════════════════════════
@@ -718,12 +680,9 @@ async function handleAuthRedirect() {
     await storeSession(access, refresh);
     history.replaceState(null, '', window.location.pathname);
     updateSyncUI();
-    // Pull cloud data, then run day reset on top of it
     const card = document.getElementById('card');
     if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
     await doPull();
-    const wasReset = checkDayReset();
-    if (wasReset) await doPush();
     showToast('Sync enabled');
     startPoll();
     render();
@@ -733,20 +692,13 @@ async function handleAuthRedirect() {
 async function restoreSession() {
     const access  = localStorage.getItem(STORAGE_KEY+'_supa_access');
     const refresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
-    if (!access || !refresh) {
-        // No session — just run day reset from local
-        checkDayReset();
-        return;
-    }
+    if (!access || !refresh) return; // no session, nothing to do
     supaSession = { access_token: access, refresh_token: refresh };
     updateSyncUI();
-    // Delay so app renders from local first, then sync
     setTimeout(async () => {
         const changed = await doPull();
-        const wasReset = checkDayReset();
-        if (wasReset) await doPush();
-        if (changed || wasReset) render();
-        startPoll(); // start poll AFTER initial sequence so it can't interfere
+        if (changed) render();
+        startPoll();
     }, 400);
 }
 
