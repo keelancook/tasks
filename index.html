@@ -12,6 +12,7 @@
     <link rel="apple-touch-icon" href="/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1a1a'/%3E%3Cline x1='7' y1='10' x2='25' y2='10' stroke='%23e8d5b0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='7' y1='16' x2='25' y2='16' stroke='%23e8d5b0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='7' y1='22' x2='18' y2='22' stroke='%23e8d5b0' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
         :root {
             --rule: rgba(0,0,0,0.12); --text: #1a1a1a; --priority: #991b1b; --line: 52px;
@@ -241,8 +242,6 @@
 /* ═══════════════════════════════════════
    CONSTANTS
 ═══════════════════════════════════════ */
-const SUPA_URL    = 'https://dxplietmqbpncikyhwve.supabase.co';
-const SUPA_KEY    = 'sb_publishable_1yrXYKJBq8O51o_PFw7HhQ_qMS_R99-';
 const STORAGE_KEY = 'ledger_db';
 const OLD_KEY     = 'analog_db';
 const COLS        = ['today','next','someday'];
@@ -333,81 +332,23 @@ function saveTyping() {
 function isDesktop() { return window.innerWidth >= 900; }
 
 /* ═══════════════════════════════════════
-   SUPABASE CLIENT
-   Architecture: cloud is source of truth.
-   - On load: pull everything from cloud unconditionally, re-render.
-   - On user action: write locally, push to cloud immediately.
-   - Never compare timestamps to decide whether to apply cloud data.
-   - The only exception is archive entries the user deliberately deleted.
+   SUPABASE — using official JS client
+   Loaded from CDN in <head>.
+   For local-only users (no session), the
+   client is never initialised and costs nothing.
 ═══════════════════════════════════════ */
-let supaSession = null;
+const SUPA_URL = 'https://dxplietmqbpncikyhwve.supabase.co';
+const SUPA_KEY = 'sb_publishable_1yrXYKJBq8O51o_PFw7HhQ_qMS_R99-';
 
-async function supaReq(path, method='GET', body=null, extra={}) {
-    if (!supaSession) throw new Error('No session');
-    const res = await fetch(SUPA_URL + path, {
-        method,
-        headers: {
-            'apikey': SUPA_KEY,
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + supaSession.access_token,
-            ...extra
-        },
-        body: body ? JSON.stringify(body) : null
-    });
-    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-}
+let supaClient  = null; // Supabase JS client instance — null until authenticated
+let supaSession = null; // current auth session
+let realtimeChannel = null; // active Realtime subscription
 
-async function supaUpsert(table, rows, conflict) {
-    if (!rows || rows.length === 0) return;
-    return supaReq(
-        `/rest/v1/${table}?on_conflict=${encodeURIComponent(conflict)}`,
-        'POST', rows,
-        { 'Prefer': 'resolution=merge-duplicates,return=minimal' }
-    );
-}
-
-async function supaSelect(table, query) {
-    return supaReq(`/rest/v1/${table}?${query}`, 'GET', null, { 'Prefer': 'return=representation' });
-}
-
-/* ── Auth ── */
-async function sendMagicLink(email) {
-    const res = await fetch(`${SUPA_URL}/auth/v1/otp`, {
-        method: 'POST',
-        headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, create_user: true })
-    });
-    if (!res.ok) throw new Error(await res.text());
-}
-
-async function storeSession(access, refresh) {
-    localStorage.setItem(STORAGE_KEY+'_supa_access', access);
-    localStorage.setItem(STORAGE_KEY+'_supa_refresh', refresh);
-    supaSession = { access_token: access, refresh_token: refresh };
-}
-
-async function tryRefreshSession() {
-    const refresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
-    if (!refresh) return false;
-    try {
-        const res = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
-            method: 'POST',
-            headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refresh })
-        });
-        if (!res.ok) return false;
-        const d = await res.json();
-        await storeSession(d.access_token, d.refresh_token);
-        return true;
-    } catch(e) { return false; }
-}
-
-function clearSession() {
-    localStorage.removeItem(STORAGE_KEY+'_supa_access');
-    localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
-    supaSession = null;
+function getSupaClient() {
+    if (!supaClient && window.supabase) {
+        supaClient = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+    }
+    return supaClient;
 }
 
 function getUserId() {
@@ -416,10 +357,31 @@ function getUserId() {
     catch(e) { return null; }
 }
 
+/* ── Auth ── */
+async function sendMagicLink(email) {
+    const client = getSupaClient();
+    if (!client) throw new Error('Supabase not loaded');
+    const { error } = await client.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    if (error) throw new Error(error.message);
+}
+
+async function storeSession(session) {
+    supaSession = session;
+    if (session) {
+        localStorage.setItem(STORAGE_KEY+'_supa_access',  session.access_token);
+        localStorage.setItem(STORAGE_KEY+'_supa_refresh', session.refresh_token);
+    }
+}
+
+function clearSession() {
+    supaSession = null;
+    localStorage.removeItem(STORAGE_KEY+'_supa_access');
+    localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
+}
+
 /* ═══════════════════════════════════════
    PUSH — write local state to cloud
-   Called after every user action.
-   Cloud always receives what the user did most recently on this device.
+   Called after every user action (debounced).
 ═══════════════════════════════════════ */
 let pushTimer = null;
 
@@ -429,11 +391,12 @@ function schedulePush() {
 }
 
 async function doPush() {
-    if (!supaSession) return;
+    const client = getSupaClient();
+    if (!supaSession || !client) return;
     const uid = getUserId(); if (!uid) return;
     setSyncStatus('syncing', 'Syncing…');
     try {
-        // Tasks
+        // Tasks — one row per slot
         const taskRows = [];
         COLS.forEach(list => {
             db[list].forEach((task, pos) => {
@@ -449,65 +412,72 @@ async function doPush() {
                 });
             });
         });
-        await supaUpsert('ledger_tasks_v2', taskRows, 'user_id,list,position');
+        const { error: taskErr } = await client
+            .from('ledger_tasks_v2')
+            .upsert(taskRows, { onConflict: 'user_id,list,position' });
+        if (taskErr) throw new Error(taskErr.message);
 
         // Archive
         if (db.archive.length > 0) {
             const seen = new Map();
             db.archive.forEach(e => {
                 const k = e.key || e.d;
-                if (k === 'meta_backup') return; // handled separately
+                if (k === 'meta_backup') return;
                 const existing = seen.get(k);
                 const count = (e.tasks||[]).filter(t=>t.t.trim()!=='').length;
                 if (!existing || count > (existing._count||0)) {
                     seen.set(k, { user_id: uid, day_key: k, tasks: e.tasks, updated_at: e.u||0, _count: count });
                 }
             });
-            const rows = [...seen.values()].map(({_count, ...r}) => r);
-            await supaUpsert('ledger_archive', rows, 'user_id,day_key');
+            const rows = [...seen.values()].map(({_count,...r})=>r);
+            const { error: archErr } = await client
+                .from('ledger_archive')
+                .upsert(rows, { onConflict: 'user_id,day_key' });
+            if (archErr) throw new Error(archErr.message);
         }
 
         setSyncStatus('synced', 'Synced');
     } catch(e) {
-        // Try session refresh once, then retry
-        const refreshed = await tryRefreshSession();
-        if (refreshed) {
-            try { await doPush(); }
-            catch(e2) { setSyncStatus('error', e2.message); }
-        } else {
-            setSyncStatus('error', e.message);
-        }
+        console.error('doPush:', e.message);
+        setSyncStatus('error', e.message);
     }
 }
 
 /* ═══════════════════════════════════════
-   PULL — cloud is authoritative, replace local
-   Called on: app load, returning after 5+ min, manual pull.
-   No timestamp comparison. Cloud wins. Period.
+   PULL — replace local with full cloud state
+   Called on load and on visibility restore.
+   Cloud wins unconditionally.
 ═══════════════════════════════════════ */
 async function doPull() {
-    if (!supaSession) return false;
+    const client = getSupaClient();
+    if (!supaSession || !client) return false;
     const uid = getUserId(); if (!uid) return false;
     setSyncStatus('syncing', 'Syncing…');
     try {
-        const tasks   = await supaSelect('ledger_tasks_v2', `select=task_id,list,position,t,s,c,updated_at&user_id=eq.${uid}`);
-        const archive = await supaSelect('ledger_archive',  `select=day_key,tasks,updated_at&user_id=eq.${uid}`);
+        const { data: tasks, error: tErr } = await client
+            .from('ledger_tasks_v2')
+            .select('task_id,list,position,t,s,c,updated_at')
+            .eq('user_id', uid);
+        if (tErr) throw new Error(tErr.message);
+
+        const { data: archive, error: aErr } = await client
+            .from('ledger_archive')
+            .select('day_key,tasks,updated_at')
+            .eq('user_id', uid);
+        if (aErr) throw new Error(aErr.message);
 
         if (!tasks || tasks.length === 0) {
-            // Nothing in cloud yet — nothing to apply
             setSyncStatus('synced', 'Synced');
             return false;
         }
 
-        // Rebuild each list from cloud data, sorted by position
+        // Rebuild lists from cloud
         const byList = { today: [], next: [], someday: [] };
         tasks.forEach(row => { if (byList[row.list]) byList[row.list].push(row); });
-
         COLS.forEach(list => {
             const rows = byList[list];
             if (rows.length === 0) return;
             rows.sort((a,b) => a.position - b.position);
-            // Build exactly 10 slots
             const newList = makeList();
             rows.forEach(row => {
                 const pos = Math.min(row.position, 9);
@@ -516,10 +486,10 @@ async function doPull() {
             db[list] = newList;
         });
 
-        // Archive — apply cloud, skip tombstoned entries
+        // Archive
         if (archive && archive.length > 0) {
             archive.forEach(row => {
-                if (row.day_key === 'meta_backup') return; // skip backup timestamp marker
+                if (row.day_key === 'meta_backup') return;
                 if (deletedArchiveKeys.has(row.day_key)) return;
                 const displayDate = row.day_key.includes('::') ? row.day_key.split('::')[0] : row.day_key;
                 const existing = db.archive.find(e => (e.key||e.d) === row.day_key);
@@ -537,30 +507,92 @@ async function doPull() {
         setSyncStatus('synced', 'Synced');
         return true;
     } catch(e) {
-        const refreshed = await tryRefreshSession();
-        if (refreshed) {
-            try { return await doPull(); }
-            catch(e2) { setSyncStatus('error', e2.message); return false; }
-        } else {
-            setSyncStatus('error', e.message);
-            return false;
-        }
+        console.error('doPull:', e.message);
+        setSyncStatus('error', e.message);
+        return false;
     }
 }
+
+/* ═══════════════════════════════════════
+   REALTIME — subscribe to changes from
+   other devices. Replaces the 30-second poll.
+   Fires only when Supabase detects a change
+   to this user's rows — zero idle disk IO.
+═══════════════════════════════════════ */
+function startRealtime() {
+    const client = getSupaClient();
+    if (!client || !supaSession) return;
+    const uid = getUserId(); if (!uid) return;
+
+    // Clean up any existing channel
+    if (realtimeChannel) { client.removeChannel(realtimeChannel); realtimeChannel = null; }
+
+    realtimeChannel = client.channel('ledger-sync')
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'ledger_tasks_v2',
+            filter: `user_id=eq.${uid}`
+        }, () => {
+            // A change arrived from another device
+            // Only apply if this device hasn't made local changes in the last 10s
+            if (Date.now() - lastLocalChange < 10000) return;
+            doPull().then(changed => { if (changed) render(); }).catch(() => {});
+        })
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'ledger_archive',
+            filter: `user_id=eq.${uid}`
+        }, () => {
+            if (Date.now() - lastLocalChange < 10000) return;
+            doPull().then(changed => { if (changed) render(); }).catch(() => {});
+        })
+        .subscribe(status => {
+            if (status === 'SUBSCRIBED') {
+                console.log('Realtime connected');
+                setSyncStatus('synced', 'Synced');
+            }
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                console.warn('Realtime issue:', status);
+                // Fall back to a single pull on error
+                doPull().then(changed => { if (changed) render(); }).catch(() => {});
+            }
+        });
+}
+
+function stopRealtime() {
+    const client = getSupaClient();
+    if (client && realtimeChannel) {
+        client.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+    }
+}
+
+/* ── Visibility change — pull on return after absence ── */
+let lastHiddenAt = null;
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { lastHiddenAt = Date.now(); return; }
+    if (document.visibilityState === 'visible' && supaSession) {
+        const away = lastHiddenAt ? Date.now() - lastHiddenAt : Infinity;
+        // After 5+ min away, do a full pull to catch anything missed while disconnected
+        if (away > 5 * 60 * 1000 && Date.now() - lastLocalChange > 10000) {
+            doPull().then(changed => { if (changed) render(); }).catch(() => {});
+        }
+    }
+});
 
 /* ── Manual sync actions ── */
 async function forcePush() {
     if (!supaSession) { showToast('Not signed in'); return; }
     await doPush();
 }
-
 async function forcePull() {
     if (!supaSession) { showToast('Not signed in'); return; }
     const changed = await doPull();
     if (changed) render();
     showToast('Pull complete');
 }
-
 async function forceOverwrite() {
     if (!supaSession) { showToast('Not signed in'); return; }
     if (!confirm('Overwrite all local data with cloud data? This cannot be undone.')) return;
@@ -596,35 +628,14 @@ function updateSyncUI() {
 }
 
 function signOut() {
-    clearSession(); updateSyncUI();
+    stopRealtime();
+    clearSession();
+    const client = getSupaClient();
+    if (client) client.auth.signOut().catch(() => {});
+    updateSyncUI();
     document.getElementById('sync-indicator').classList.remove('visible');
     closeAll(); showToast('Signed out');
 }
-
-/* ── Background poll ── */
-let pollTimer = null;
-let lastHiddenAt = null;
-
-function startPoll() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(() => {
-        if (!supaSession || document.activeElement?.tagName === 'INPUT') return;
-        // Don't pull if this device made changes in the last 10 seconds
-        // — the push may still be in flight and we don't want to overwrite local state
-        if (Date.now() - lastLocalChange < 10000) return;
-        doPull().then(changed => { if (changed) render(); }).catch(() => {});
-    }, 30000);
-}
-
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') { lastHiddenAt = Date.now(); return; }
-    if (document.visibilityState === 'visible' && supaSession) {
-        const away = lastHiddenAt ? Date.now() - lastHiddenAt : Infinity;
-        if (away > 5 * 60 * 1000 && Date.now() - lastLocalChange > 10000) {
-            doPull().then(changed => { if (changed) render(); }).catch(() => {});
-        }
-    }
-});
 
 /* ── Auth flow ── */
 let longPressTimer = null;
@@ -663,55 +674,67 @@ async function submitMagicLink() {
         await sendMagicLink(email);
         msg.textContent = 'Check your email for a magic link.';
     } catch(e) {
-        let err = e.message;
-        try { const p = JSON.parse(err); err = p.error_description || p.msg || p.message || err; } catch(_) {}
-        msg.textContent = 'Error: ' + err;
+        msg.textContent = 'Error: ' + e.message;
         btn.disabled = false;
     }
 }
 
 async function handleAuthRedirect() {
-    const hash = window.location.hash;
-    if (!hash || hash.length < 2) return false;
-    const params = new URLSearchParams(hash.substring(1));
-    const access = params.get('access_token');
-    const refresh = params.get('refresh_token');
-    if (!access || !refresh) return false;
-    await storeSession(access, refresh);
+    const client = getSupaClient();
+    if (!client) return false;
+    // Let the Supabase client handle the hash — it parses the token automatically
+    const { data, error } = await client.auth.getSessionFromUrl();
+    if (error || !data?.session) return false;
+    await storeSession(data.session);
     history.replaceState(null, '', window.location.pathname);
     updateSyncUI();
     const card = document.getElementById('card');
     if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
     await doPull();
+    startRealtime();
     showToast('Sync enabled');
-    startPoll();
     render();
     return true;
 }
 
 async function restoreSession() {
-    const access  = localStorage.getItem(STORAGE_KEY+'_supa_access');
-    const refresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
-    if (!access || !refresh) return; // no session, nothing to do
-    supaSession = { access_token: access, refresh_token: refresh };
+    const client = getSupaClient();
+    if (!client) return;
+    // Let Supabase client restore session from its own storage or our localStorage
+    const storedAccess  = localStorage.getItem(STORAGE_KEY+'_supa_access');
+    const storedRefresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
+    if (!storedAccess || !storedRefresh) return;
+
+    // Set session on the client
+    const { data, error } = await client.auth.setSession({
+        access_token:  storedAccess,
+        refresh_token: storedRefresh
+    });
+    if (error || !data?.session) { clearSession(); return; }
+    await storeSession(data.session); // store refreshed tokens
     updateSyncUI();
+
     setTimeout(async () => {
         const changed = await doPull();
         if (changed) render();
-        startPoll();
+        startRealtime();
     }, 400);
 }
 
 /* ── Backup timestamp sync ── */
 async function syncBackupTimestamp() {
-    if (!supaSession) return;
+    const client = getSupaClient();
+    if (!supaSession || !client) return;
     const uid = getUserId(); if (!uid) return;
     try {
-        const rows = await supaSelect('ledger_archive',
-            `select=updated_at&user_id=eq.${uid}&day_key=eq.meta_backup`
-        );
-        if (rows && rows.length > 0) {
-            const remoteTs = rows[0].updated_at || 0;
+        const { data } = await client
+            .from('ledger_archive')
+            .select('updated_at')
+            .eq('user_id', uid)
+            .eq('day_key', 'meta_backup')
+            .single();
+        if (data) {
+            const remoteTs = data.updated_at || 0;
             const localTs  = parseInt(localStorage.getItem(STORAGE_KEY+'_lastBackup')) || 0;
             if (remoteTs > localTs) {
                 localStorage.setItem(STORAGE_KEY+'_lastBackup', remoteTs.toString());
@@ -722,15 +745,14 @@ async function syncBackupTimestamp() {
 }
 
 async function pushBackupTimestamp(ts) {
-    if (!supaSession) return;
+    const client = getSupaClient();
+    if (!supaSession || !client) return;
     const uid = getUserId(); if (!uid) return;
     try {
-        await supaUpsert('ledger_archive', [{
-            user_id:    uid,
-            day_key:    'meta_backup',
-            tasks:      [],
-            updated_at: ts
-        }], 'user_id,day_key');
+        await client.from('ledger_archive').upsert(
+            [{ user_id: uid, day_key: 'meta_backup', tasks: [], updated_at: ts }],
+            { onConflict: 'user_id,day_key' }
+        );
     } catch(e) { /* non-critical */ }
 }
 
