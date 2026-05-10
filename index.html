@@ -83,12 +83,21 @@
         body.has-banner #dt-tray { padding-top: 40px; }
 
         /* ── Sync indicator ── */
-        #sync-indicator { position: fixed; bottom: 20px; right: 16px; font-family: sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; display: none; align-items: center; gap: 6px; z-index: 50; background: rgba(0,0,0,0.72); color: #fff; padding: 5px 12px; border-radius: 20px; pointer-events: none; }
+        #sync-indicator { position: fixed; bottom: 20px; right: 16px; font-family: sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; display: none; align-items: center; gap: 6px; z-index: 50; background: rgba(0,0,0,0.72); color: #fff; padding: 5px 12px; border-radius: 20px; cursor: default; }
         #sync-indicator.visible { display: flex; }
-        #sync-indicator.error { background: rgba(153,27,27,0.9); pointer-events: auto; cursor: pointer; }
-        #sync-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-        #sync-indicator.syncing #sync-dot { animation: pulse 1s infinite; }
+        #sync-indicator.syncing { background: rgba(0,0,0,0.72); }
+        #sync-indicator.synced  { background: rgba(0,0,0,0.55); }
+        #sync-indicator.error   { background: rgba(153,27,27,0.9); cursor: pointer; }
+        #sync-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        #sync-indicator.syncing #sync-dot { background: #facc15; animation: pulse 1s infinite; }
+        #sync-indicator.synced  #sync-dot { background: #4ade80; }
+        #sync-indicator.error   #sync-dot { background: #fca5a5; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        #sync-error-panel { display: none; position: fixed; bottom: 60px; right: 16px; background: #1a1a1a; color: #fca5a5; font-family: monospace; font-size: 12px; line-height: 1.5; padding: 14px 16px; border-radius: 8px; z-index: 9999; max-width: min(320px, calc(100vw - 32px)); word-break: break-all; border: 1px solid rgba(255,100,100,0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+        #sync-error-panel.visible { display: block; }
+        #sync-error-panel-msg { user-select: all; -webkit-user-select: all; margin-bottom: 10px; color: #fff; }
+        #sync-error-panel-close { color: rgba(255,255,255,0.4); font-size: 11px; cursor: pointer; text-align: right; font-family: sans-serif; }
+        #sync-error-panel-close:hover { color: #fff; }
 
         /* ── Auth modal ── */
         #auth-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center; }
@@ -150,8 +159,11 @@
             #dt-keys.drawer-open { right: 360px; }
             .kb-hint { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.5px; color: rgba(255,255,255,0.22); display: flex; align-items: center; gap: 5px; }
             .kb-hint kbd { display: inline-flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 3px; padding: 1px 5px; min-width: 18px; }
-            #sync-indicator { bottom: 36px; right: 88px; background: transparent; padding: 0; border-radius: 0; font-family: 'Cormorant Garamond', serif; font-size: 13px; font-weight: 400; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); }
-            #sync-indicator.error { background: transparent; color: rgba(180,60,60,0.9); }
+            #sync-indicator { bottom: 36px; right: 88px; background: transparent; padding: 0; border-radius: 0; font-family: 'Cormorant Garamond', serif; font-size: 13px; font-weight: 400; letter-spacing: 0.5px; color: rgba(255,255,255,0.5); }
+            #sync-indicator.syncing { background: transparent; color: rgba(255,255,255,0.6); }
+            #sync-indicator.synced  { background: transparent; color: rgba(255,255,255,0.35); }
+            #sync-indicator.error   { background: transparent; color: rgba(220,80,80,0.9); cursor: pointer; }
+            #sync-error-panel { bottom: 70px; right: 88px; }
         }
         @media (max-width: 899px) {
             #dt-layout { display: none !important; }
@@ -166,6 +178,10 @@
         <button onclick="dismissBanner()">Dismiss</button>
     </div>
     <div id="sync-indicator"><div id="sync-dot"></div><span id="sync-label">Synced</span></div>
+    <div id="sync-error-panel">
+        <div id="sync-error-panel-msg"></div>
+        <div id="sync-error-panel-close" onclick="document.getElementById('sync-error-panel').classList.remove('visible')">Tap and hold text above to copy · Dismiss ✕</div>
+    </div>
     <div id="auth-modal">
         <div id="auth-box">
             <h2>Sync</h2>
@@ -550,11 +566,11 @@ function startRealtime() {
         })
         .subscribe(status => {
             if (status === 'SUBSCRIBED') {
-                console.log('Realtime connected');
                 setSyncStatus('synced', 'Synced');
             }
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                 console.warn('Realtime issue:', status);
+                setSyncStatus('error', 'Realtime disconnected — ' + status);
                 // Fall back to a single pull on error
                 doPull().then(changed => { if (changed) render(); }).catch(() => {});
             }
@@ -603,20 +619,32 @@ async function forceOverwrite() {
 
 /* ── Sync indicator ── */
 let syncHideTimer = null;
+let lastSyncError = '';
+
 function setSyncStatus(state, label) {
     const el = document.getElementById('sync-indicator');
     const lb = document.getElementById('sync-label');
     if (!el) return;
     clearTimeout(syncHideTimer);
     el.className = 'visible ' + state;
-    lb.textContent = label;
     el.onclick = null;
+
     if (state === 'error') {
-        lb.textContent = 'Sync failed — tap';
-        el.onclick = () => alert('Sync error:\n\n' + label);
-    }
-    if (state === 'synced') {
-        syncHideTimer = setTimeout(() => el.classList.remove('visible'), 3000);
+        lastSyncError = label;
+        lb.textContent = 'Sync failed';
+        el.onclick = () => {
+            const panel = document.getElementById('sync-error-panel');
+            document.getElementById('sync-error-panel-msg').textContent = label;
+            panel.classList.toggle('visible');
+        };
+    } else if (state === 'syncing') {
+        lb.textContent = 'Syncing…';
+        document.getElementById('sync-error-panel').classList.remove('visible');
+    } else {
+        lb.textContent = 'Synced';
+        document.getElementById('sync-error-panel').classList.remove('visible');
+        // Fade label after 3s but keep the green dot visible
+        syncHideTimer = setTimeout(() => { lb.textContent = ''; }, 3000);
     }
 }
 
@@ -633,7 +661,9 @@ function signOut() {
     const client = getSupaClient();
     if (client) client.auth.signOut().catch(() => {});
     updateSyncUI();
-    document.getElementById('sync-indicator').classList.remove('visible');
+    const el = document.getElementById('sync-indicator');
+    if (el) el.classList.remove('visible');
+    document.getElementById('sync-error-panel').classList.remove('visible');
     closeAll(); showToast('Signed out');
 }
 
@@ -713,6 +743,7 @@ async function restoreSession() {
     if (error || !data?.session) { clearSession(); return; }
     await storeSession(data.session); // store refreshed tokens
     updateSyncUI();
+    setSyncStatus('syncing', 'Syncing…'); // show indicator immediately
 
     setTimeout(async () => {
         const changed = await doPull();
