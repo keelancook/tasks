@@ -159,10 +159,13 @@
             #dt-keys.drawer-open { right: 360px; }
             .kb-hint { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.5px; color: rgba(255,255,255,0.22); display: flex; align-items: center; gap: 5px; }
             .kb-hint kbd { display: inline-flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 3px; padding: 1px 5px; min-width: 18px; }
-            #sync-indicator { bottom: 36px; right: 88px; background: transparent; padding: 0; border-radius: 0; font-family: 'Cormorant Garamond', serif; font-size: 13px; font-weight: 400; letter-spacing: 0.5px; color: rgba(255,255,255,0.5); }
+            #sync-indicator { bottom: 36px; right: 88px; background: transparent; padding: 0; border-radius: 0; font-family: 'Cormorant Garamond', serif; font-size: 13px; font-weight: 400; letter-spacing: 0.5px; color: rgba(255,255,255,0.5); gap: 8px; }
             #sync-indicator.syncing { background: transparent; color: rgba(255,255,255,0.6); }
             #sync-indicator.synced  { background: transparent; color: rgba(255,255,255,0.35); }
             #sync-indicator.error   { background: transparent; color: rgba(220,80,80,0.9); cursor: pointer; }
+            #sync-indicator.syncing #sync-dot { background: #facc15; }
+            #sync-indicator.synced  #sync-dot { background: #4ade80; }
+            #sync-indicator.error   #sync-dot { background: #f87171; }
             #sync-error-panel { bottom: 70px; right: 88px; }
         }
         @media (max-width: 899px) {
@@ -626,6 +629,7 @@ function setSyncStatus(state, label) {
     const lb = document.getElementById('sync-label');
     if (!el) return;
     clearTimeout(syncHideTimer);
+    // Always visible once we have a session
     el.className = 'visible ' + state;
     el.onclick = null;
 
@@ -639,12 +643,14 @@ function setSyncStatus(state, label) {
         };
     } else if (state === 'syncing') {
         lb.textContent = 'Syncing…';
-        document.getElementById('sync-error-panel').classList.remove('visible');
+        document.getElementById('sync-error-panel')?.classList.remove('visible');
     } else {
+        // Synced — show label briefly then clear it, but dot stays green
         lb.textContent = 'Synced';
-        document.getElementById('sync-error-panel').classList.remove('visible');
-        // Fade label after 3s but keep the green dot visible
-        syncHideTimer = setTimeout(() => { lb.textContent = ''; }, 3000);
+        document.getElementById('sync-error-panel')?.classList.remove('visible');
+        syncHideTimer = setTimeout(() => {
+            lb.textContent = '';
+        }, 3000);
     }
 }
 
