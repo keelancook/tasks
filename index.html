@@ -498,20 +498,23 @@ async function doPull() {
             db[list] = newList;
         });
 
-        // Archive
+        // Archive — fully replace from cloud, skipping only tombstoned entries
         if (archive && archive.length > 0) {
+            // Build a map of what's in the cloud
+            const cloudMap = new Map();
             archive.forEach(row => {
                 if (row.day_key === 'meta_backup') return;
                 if (deletedArchiveKeys.has(row.day_key)) return;
                 const displayDate = row.day_key.includes('::') ? row.day_key.split('::')[0] : row.day_key;
-                const existing = db.archive.find(e => (e.key||e.d) === row.day_key);
-                if (!existing) {
-                    db.archive.push({ d: displayDate, key: row.day_key, tasks: ensureIds(row.tasks||[]), u: row.updated_at||0 });
-                } else {
-                    existing.tasks = ensureIds(row.tasks||[]);
-                    existing.u = row.updated_at||0;
-                }
+                cloudMap.set(row.day_key, { d: displayDate, key: row.day_key, tasks: ensureIds(row.tasks||[]), u: row.updated_at||0 });
             });
+            // Keep local entries not in cloud (newly committed, not yet pushed)
+            // but replace everything that cloud knows about
+            const localOnlyEntries = db.archive.filter(e => {
+                const k = e.key || e.d;
+                return !cloudMap.has(k) && !deletedArchiveKeys.has(k);
+            });
+            db.archive = [...cloudMap.values(), ...localOnlyEntries];
             db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
         }
 
@@ -608,6 +611,11 @@ async function forcePull() {
 async function forceOverwrite() {
     if (!supaSession) { showToast('Not signed in'); return; }
     if (!confirm('Overwrite all local data with cloud data? This cannot be undone.')) return;
+    // Wipe local archive and deleted keys before pulling
+    // so cloud data fully replaces rather than merges
+    db.archive = [];
+    deletedArchiveKeys = new Set();
+    localStorage.setItem(STORAGE_KEY+'_deleted_arc', '[]');
     const changed = await doPull();
     if (changed) render();
     showToast('Restored from cloud');
