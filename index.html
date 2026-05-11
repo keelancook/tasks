@@ -83,19 +83,17 @@
         body.has-banner #dt-tray { padding-top: 40px; }
 
         /* ── Sync indicator ── */
-        #sync-indicator { position: fixed; bottom: 20px; right: 16px; font-family: sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; display: none; align-items: center; gap: 6px; z-index: 50; background: rgba(0,0,0,0.72); color: #fff; padding: 5px 12px; border-radius: 20px; cursor: default; }
+        #sync-indicator { position: fixed; bottom: 16px; right: 14px; display: none; align-items: center; gap: 6px; z-index: 9000; cursor: default; font-family: sans-serif; font-size: 12px; font-weight: 600; color: #fff; background: rgba(0,0,0,0.65); padding: 4px 10px 4px 8px; border-radius: 20px; }
         #sync-indicator.visible { display: flex; }
-        #sync-indicator.syncing { background: rgba(0,0,0,0.72); }
-        #sync-indicator.synced  { background: rgba(0,0,0,0.55); }
-        #sync-indicator.error   { background: rgba(153,27,27,0.9); cursor: pointer; }
-        #sync-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        #sync-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
         #sync-indicator.syncing #sync-dot { background: #facc15; animation: pulse 1s infinite; }
         #sync-indicator.synced  #sync-dot { background: #4ade80; }
-        #sync-indicator.error   #sync-dot { background: #fca5a5; }
+        #sync-indicator.error   #sync-dot { background: #f87171; }
+        #sync-indicator.error { background: rgba(120,20,20,0.85); cursor: pointer; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-        #sync-error-panel { display: none; position: fixed; bottom: 60px; right: 16px; background: #1a1a1a; color: #fca5a5; font-family: monospace; font-size: 12px; line-height: 1.5; padding: 14px 16px; border-radius: 8px; z-index: 9999; max-width: min(320px, calc(100vw - 32px)); word-break: break-all; border: 1px solid rgba(255,100,100,0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+        #sync-error-panel { display: none; position: fixed; bottom: 56px; right: 14px; background: #1a1a1a; color: #fff; font-family: monospace; font-size: 12px; line-height: 1.5; padding: 14px 16px; border-radius: 8px; z-index: 9001; max-width: min(320px, calc(100vw - 28px)); word-break: break-all; border: 1px solid rgba(255,100,100,0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         #sync-error-panel.visible { display: block; }
-        #sync-error-panel-msg { user-select: all; -webkit-user-select: all; margin-bottom: 10px; color: #fff; }
+        #sync-error-panel-msg { user-select: all; -webkit-user-select: all; margin-bottom: 10px; }
         #sync-error-panel-close { color: rgba(255,255,255,0.4); font-size: 11px; cursor: pointer; text-align: right; font-family: sans-serif; }
         #sync-error-panel-close:hover { color: #fff; }
 
@@ -659,6 +657,8 @@ function updateSyncUI() {
     ['sync-push-item','sync-pull-item','sync-overwrite-item','sync-signout-item'].forEach(id => {
         const el = document.getElementById(id); if (el) el.style.display = show;
     });
+    // Always show the dot when authenticated
+    if (supaSession) setSyncStatus('synced', 'Synced');
 }
 
 function signOut() {
@@ -734,22 +734,31 @@ async function handleAuthRedirect() {
 }
 
 async function restoreSession() {
-    const client = getSupaClient();
-    if (!client) return;
-    // Let Supabase client restore session from its own storage or our localStorage
     const storedAccess  = localStorage.getItem(STORAGE_KEY+'_supa_access');
     const storedRefresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
     if (!storedAccess || !storedRefresh) return;
 
-    // Set session on the client
+    // Show indicator immediately — we know tokens exist even before verifying them
+    const el = document.getElementById('sync-indicator');
+    if (el) { el.className = 'visible syncing'; document.getElementById('sync-label').textContent = 'Syncing…'; }
+
+    const client = getSupaClient();
+    if (!client) {
+        if (el) el.className = 'visible error';
+        return;
+    }
+
     const { data, error } = await client.auth.setSession({
         access_token:  storedAccess,
         refresh_token: storedRefresh
     });
-    if (error || !data?.session) { clearSession(); return; }
-    await storeSession(data.session); // store refreshed tokens
+    if (error || !data?.session) {
+        clearSession();
+        if (el) el.classList.remove('visible');
+        return;
+    }
+    await storeSession(data.session);
     updateSyncUI();
-    setSyncStatus('syncing', 'Syncing…'); // show indicator immediately
 
     setTimeout(async () => {
         const changed = await doPull();
