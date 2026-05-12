@@ -807,44 +807,22 @@ async function handleAuthRedirect() {
 }
 
 async function restoreSession() {
-    const client = getSupaClient(); // initializes client and auth listener
+    const client = getSupaClient();
     if (!client) return;
 
-    // Show dot immediately while we check
     const el = document.getElementById('sync-indicator');
     if (el) el.className = 'visible syncing';
 
-    // Ask the client for its own stored session — it handles refresh automatically
+    // Ask the client for its persisted session — it handles refresh automatically
     const { data: { session }, error } = await client.auth.getSession();
     if (error || !session) {
-        // No valid session — check if we have old manual tokens to migrate
-        const oldAccess  = localStorage.getItem(STORAGE_KEY+'_supa_access');
-        const oldRefresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
-        if (oldAccess && oldRefresh) {
-            const { data, error: setErr } = await client.auth.setSession({
-                access_token:  oldAccess,
-                refresh_token: oldRefresh
-            });
-            if (setErr || !data?.session) {
-                // Old tokens are expired — need to sign in again
-                if (el) el.classList.remove('visible');
-                localStorage.removeItem(STORAGE_KEY+'_supa_access');
-                localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
-                return;
-            }
-            supaSession = data.session;
-            // Clean up old keys — client now manages its own
-            localStorage.removeItem(STORAGE_KEY+'_supa_access');
-            localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
-        } else {
-            if (el) el.classList.remove('visible');
-            return;
-        }
-    } else {
-        supaSession = session;
+        if (el) el.classList.remove('visible');
+        return;
     }
 
+    supaSession = session;
     updateSyncUI();
+
     setTimeout(async () => {
         const changed = await doPull();
         if (changed) render();
