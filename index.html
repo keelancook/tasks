@@ -12,6 +12,7 @@
     <link rel="apple-touch-icon" href="/icon-192.png">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1a1a'/%3E%3Cline x1='7' y1='10' x2='25' y2='10' stroke='%23e8d5b0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='7' y1='16' x2='25' y2='16' stroke='%23e8d5b0' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='7' y1='22' x2='18' y2='22' stroke='%23e8d5b0' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
         :root {
             --rule: rgba(0,0,0,0.12); --text: #1a1a1a; --priority: #991b1b; --line: 52px;
@@ -77,18 +78,22 @@
         /* ── Backup banner ── */
         #backup-banner { display: none; position: fixed; top: 0; left: 0; right: 0; background: #991b1b; color: #fff; font-family: sans-serif; font-size: 13px; font-weight: 600; padding: 10px 16px; z-index: 500; text-align: center; line-height: 1.4; }
         #backup-banner.visible { display: block; }
-        #backup-banner button { margin-left: 12px; background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5); color: #fff; border-radius: 4px; padding: 3px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        #backup-banner button { margin-left: 10px; background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.5); color: #fff; border-radius: 4px; padding: 3px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
         body.has-banner #vp { padding-top: 40px; height: calc(100vh - 40px); }
         body.has-banner #dt-tray { padding-top: 40px; }
 
         /* ── Sync indicator ── */
-        #sync-indicator { position: fixed; bottom: 20px; right: 16px; font-family: sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; display: none; align-items: center; gap: 6px; z-index: 50; pointer-events: none; background: rgba(0,0,0,0.72); color: #fff; padding: 5px 12px; border-radius: 20px; }
-        #sync-indicator.visible { display: flex; }
-        #sync-indicator.syncing { color: rgba(255,255,255,0.85); }
-        #sync-indicator.error { background: rgba(153,27,27,0.9); color: #fff; }
-        #sync-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-        #sync-indicator.syncing #sync-dot { animation: pulse 1s infinite; }
+        #sync-indicator { position: fixed; bottom: 16px; right: 14px; display: none; z-index: 9000; cursor: default; width: 10px; height: 10px; border-radius: 50%; }
+        #sync-indicator.visible { display: block; }
+        #sync-indicator.syncing { background: #facc15; animation: pulse 1s infinite; }
+        #sync-indicator.synced  { background: #4ade80; }
+        #sync-indicator.error   { background: #f87171; cursor: pointer; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        #sync-error-panel { display: none; position: fixed; bottom: 34px; right: 14px; background: #1a1a1a; color: #fff; font-family: monospace; font-size: 12px; line-height: 1.5; padding: 14px 16px; border-radius: 8px; z-index: 9001; max-width: min(320px, calc(100vw - 28px)); word-break: break-all; border: 1px solid rgba(255,100,100,0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        #sync-error-panel.visible { display: block; }
+        #sync-error-panel-msg { user-select: all; -webkit-user-select: all; margin-bottom: 10px; cursor: text; color: #fff; }
+        #sync-error-panel-close { color: rgba(255,255,255,0.4); font-size: 11px; cursor: pointer; text-align: right; font-family: sans-serif; }
+        #sync-error-panel-close:hover { color: #fff; }
 
         /* ── Auth modal ── */
         #auth-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center; }
@@ -102,7 +107,6 @@
         #auth-submit:disabled { opacity: 0.5; cursor: default; }
         #auth-msg { margin-top: 14px; font-size: 14px; color: rgba(0,0,0,0.55); font-style: italic; min-height: 20px; }
         #auth-cancel { margin-top: 10px; width: 100%; padding: 8px; background: transparent; border: none; font-family: 'Cormorant Garamond', serif; font-size: 15px; color: rgba(0,0,0,0.4); cursor: pointer; }
-        #auth-cancel:hover { color: rgba(0,0,0,0.7); }
 
         /* ── DESKTOP ── */
         #dt-layout { display: none; }
@@ -115,15 +119,15 @@
             .dt-card.c-today { background: var(--paper-today); }
             .dt-card.c-next { background: var(--paper-next); }
             .dt-card.c-someday { background: var(--paper-someday); }
+            .dt-card.drag-over { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.18); }
             .dt-hdr { padding: 28px 24px 0 24px; flex-shrink: 0; }
             .dt-hdr-top { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 18px; }
             .dt-hdr-top b { font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 500; letter-spacing: 3px; text-transform: uppercase; color: #000; cursor: default; }
-            .dt-hdr-top span { font-family: 'Cormorant Garamond', serif; font-size: 14px; font-style: italic; font-weight: 400; color: rgba(0,0,0,0.38); letter-spacing: 0.5px; }
+            .dt-hdr-top span { font-family: 'Cormorant Garamond', serif; font-size: 14px; font-style: italic; font-weight: 400; color: rgba(0,0,0,0.38); }
             .dt-rule { height: 1px; background: var(--top-rule); }
             .dt-body { flex: 1; overflow-y: auto; padding-bottom: 24px; }
             .dt-card li { height: 48px; padding: 0 14px; }
             .dt-card input { font-size: 22px; }
-            .dt-card.drag-over { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.18); }
             .dt-fin-wrap { padding: 16px 24px 24px; flex-shrink: 0; text-align: center; }
             #dt-ledger-btn { position: fixed; right: 0; top: 0; bottom: 0; width: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; user-select: none; z-index: 10; opacity: 0.28; transition: opacity 0.2s; }
             #dt-ledger-btn:hover { opacity: 0.7; }
@@ -145,15 +149,13 @@
             #dt-drawer-body { flex: 1; overflow-y: auto; padding-bottom: 40px; }
             #dt-arc-banner { display: none; padding: 9px 24px; background: rgba(0,0,0,0.07); flex-shrink: 0; font-family: 'Cormorant Garamond', serif; font-size: 13px; letter-spacing: 1px; color: rgba(0,0,0,0.5); text-transform: uppercase; align-items: center; justify-content: space-between; }
             #dt-arc-banner.visible { display: flex; }
-            #dt-arc-back { cursor: pointer; font-size: 13px; color: rgba(0,0,0,0.45); letter-spacing: 0.5px; font-style: italic; }
+            #dt-arc-back { cursor: pointer; font-size: 13px; color: rgba(0,0,0,0.45); font-style: italic; }
             #dt-arc-back:hover { color: rgba(0,0,0,0.8); }
             #dt-keys { position: fixed; bottom: 0; left: 0; right: 72px; display: flex; align-items: center; justify-content: center; gap: 28px; padding: 9px 0 11px; pointer-events: none; transition: right 0.32s cubic-bezier(0.2,1,0.3,1); }
             #dt-keys.drawer-open { right: 360px; }
             .kb-hint { font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.5px; color: rgba(255,255,255,0.22); display: flex; align-items: center; gap: 5px; }
             .kb-hint kbd { display: inline-flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 3px; padding: 1px 5px; min-width: 18px; }
-            #sync-indicator { bottom: 36px; right: 88px; background: transparent; padding: 0; border-radius: 0; font-family: 'Cormorant Garamond', serif; font-size: 13px; font-weight: 400; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); }
-            #sync-indicator.syncing { color: rgba(255,255,255,0.6); }
-            #sync-indicator.error { background: transparent; color: rgba(180,60,60,0.8); }
+            #sync-error-panel { bottom: 70px; right: 88px; }
         }
         @media (max-width: 899px) {
             #dt-layout { display: none !important; }
@@ -162,9 +164,16 @@
     </style>
 </head>
 <body>
-    <div id="backup-banner">Backup overdue — last export was over 7 days ago.<button onclick="exportData()">Export Now</button><button onclick="dismissBanner()">Dismiss</button></div>
-    <div id="sync-indicator"><div id="sync-dot"></div><span id="sync-label">Synced</span></div>
-
+    <div id="backup-banner">
+        Backup overdue — last export was over 7 days ago.
+        <button onclick="exportData()">Export Now</button>
+        <button onclick="dismissBanner()">Dismiss</button>
+    </div>
+    <div id="sync-indicator"></div>
+    <div id="sync-error-panel">
+        <div id="sync-error-panel-msg"></div>
+        <div id="sync-error-panel-close" onclick="document.getElementById('sync-error-panel').classList.remove('visible')">Tap and hold text above to copy · Dismiss ✕</div>
+    </div>
     <div id="auth-modal">
         <div id="auth-box">
             <h2>Sync</h2>
@@ -186,7 +195,7 @@
                 <div id="dt-someday" data-col="someday"  class="dt-card c-someday"></div>
             </div>
         </div>
-        <div id="dt-ledger-btn" onclick="dtOpenLedger()" title="Open Ledger (L)">
+        <div id="dt-ledger-btn" onclick="dtOpenLedger()" title="Ledger (L)">
             <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"/></svg>
             <span>Ledger</span>
         </div>
@@ -239,198 +248,139 @@
 
 <script>
 /* ═══════════════════════════════════════
-   CONSTANTS — defined before everything
+   CONSTANTS
 ═══════════════════════════════════════ */
-const SUPA_URL   = 'https://dxplietmqbpncikyhwve.supabase.co';
-const SUPA_KEY   = 'sb_publishable_1yrXYKJBq8O51o_PFw7HhQ_qMS_R99-';
 const STORAGE_KEY = 'ledger_db';
-const OLD_KEY    = 'analog_db';
-const COLS       = ['today','next','someday'];
+const OLD_KEY     = 'analog_db';
+const COLS        = ['today','next','someday'];
 
 /* ═══════════════════════════════════════
-   UUID HELPER
+   HELPERS
 ═══════════════════════════════════════ */
 function uuid() {
     return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
         (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
 }
 
+function getShortDate(d) {
+    return `${d.toLocaleDateString('en-US',{month:'short'})} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function makeEmptySlot() { return { id: uuid(), t:'', s:0, c:0 }; }
+function makeList(n=10)   { return Array(n).fill(null).map(() => makeEmptySlot()); }
+
+function makeArchiveKey(dateStr) {
+    // Never append a timestamp to something that already has one
+    if (dateStr.includes('::')) return dateStr;
+    return `${dateStr}::${Date.now()}`;
+}
+
 /* ═══════════════════════════════════════
-   DATA MODEL
-   Each task: { id, t, s, c, u }
-     id = stable UUID (never changes)
-     t  = text
-     s  = status (0=open,1=progress,2=done,3=migrated)
-     c  = tally count
-     u  = updated_at timestamp (ms)
-   Each list stores an ordered array of tasks.
-   Order IS the position — first item is slot 0.
-   Empty slots use { id, t:'', s:0, c:0, u:0 }.
+   DATA — load from localStorage
 ═══════════════════════════════════════ */
 
-function makeEmptySlot() {
-    return { id: uuid(), t:'', s:0, c:0, u:0 };
-}
-
-function makeList(n=10) {
-    return Array(n).fill(null).map(() => makeEmptySlot());
-}
-
-/* ── Migration from old format (no id field) ── */
-function migrate() {
-    // Old storage key migration
+// Migrate old key
+function migrateOldKey() {
     ['_t','_n','_s','_a','_lastDate'].forEach(k => {
         const o = localStorage.getItem(OLD_KEY+k);
-        const n = localStorage.getItem(STORAGE_KEY+k);
-        if (o && !n) localStorage.setItem(STORAGE_KEY+k, o);
+        if (o && !localStorage.getItem(STORAGE_KEY+k)) localStorage.setItem(STORAGE_KEY+k, o);
     });
 }
-migrate();
+migrateOldKey();
 
-function addMissingIds(list) {
-    return list.map(task => {
-        if (!task.id) task.id = uuid();
-        if (!task.u)  task.u  = 0;
-        if (task.c === undefined) task.c = 0;
-        return task;
-    });
+function ensureIds(list) {
+    return list.map(t => { if (!t.id) t.id = uuid(); return t; });
 }
 
 let db = {
-    today:   addMissingIds(JSON.parse(localStorage.getItem(STORAGE_KEY+'_t')) || makeList()),
-    next:    addMissingIds(JSON.parse(localStorage.getItem(STORAGE_KEY+'_n')) || makeList()),
-    someday: addMissingIds(JSON.parse(localStorage.getItem(STORAGE_KEY+'_s')) || makeList()),
+    today:   ensureIds(JSON.parse(localStorage.getItem(STORAGE_KEY+'_t')) || makeList()),
+    next:    ensureIds(JSON.parse(localStorage.getItem(STORAGE_KEY+'_n')) || makeList()),
+    someday: ensureIds(JSON.parse(localStorage.getItem(STORAGE_KEY+'_s')) || makeList()),
     archive: JSON.parse(localStorage.getItem(STORAGE_KEY+'_a')) || [],
     lastActiveDate: localStorage.getItem(STORAGE_KEY+'_lastDate') || getShortDate(new Date())
 };
 
-// Ensure all archive entries have tasks with ids, u timestamps, and unique keys
-db.archive.forEach(entry => {
-    if (entry.tasks) entry.tasks = addMissingIds(entry.tasks);
-    if (!entry.u) entry.u = 0;
-    if (!entry.key) entry.key = `${entry.d}::${entry.u || Date.now()}`;
+// Ensure archive entries have keys and task ids
+db.archive.forEach(e => {
+    if (!e.key) e.key = `${e.d}::${e.u || 0}`;
+    if (e.tasks) e.tasks = ensureIds(e.tasks);
 });
 
-function touchTask(task) { task.u = Date.now(); }
+// Deleted archive keys — tombstones that survive page reload
+let deletedArchiveKeys = new Set(
+    JSON.parse(localStorage.getItem(STORAGE_KEY+'_deleted_arc') || '[]')
+);
 
-function save() {
-    // Enforce 10-slot max
-    COLS.forEach(col => { if (db[col].length > 10) db[col] = db[col].slice(0, 10); });
+function saveLocal() {
+    COLS.forEach(col => { if (db[col].length > 10) db[col] = db[col].slice(0,10); });
     localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
     localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next));
     localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
     localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
     localStorage.setItem(STORAGE_KEY+'_lastDate', db.lastActiveDate);
-    if (supaSession && (!document.activeElement || document.activeElement.tagName !== 'INPUT')) {
-        scheduleSyncPush();
-    }
 }
 
-function getShortDate(d) {
-    return `${d.toLocaleDateString('en-US',{month:'short'})} ${d.getDate()}, ${d.getFullYear()}`;
+/* ─── save = saveLocal + schedule cloud push ─── */
+let lastLocalChange = 0; // timestamp of last user action on this device
+
+function save() {
+    saveLocal();
+    lastLocalChange = Date.now();
+    if (supaSession && document.activeElement?.tagName !== 'INPUT') schedulePush();
 }
 
-function makeArchiveKey(dateStr) {
-    // Creates a unique key per commit: "Apr 22, 2025::1745123456789"
-    return `${dateStr}::${Date.now()}`;
+/* ─── save while typing — deferred push ─── */
+function saveTyping() {
+    saveLocal();
+    lastLocalChange = Date.now();
+    // Push deferred until blur
 }
 
-function checkDayReset() {
-    const todayStr = getShortDate(new Date());
-    if (db.lastActiveDate !== todayStr) {
-        db.archive.push({ d: db.lastActiveDate, key: makeArchiveKey(db.lastActiveDate), tasks: JSON.parse(JSON.stringify(db.today)), u: Date.now() });
-        const migrated = db.today.filter(t => (t.s===1||t.s===3) && t.t.trim()!=='');
-        db.today = makeList();
-        migrated.forEach((t,i) => {
-            if (i < 10) {
-                db.today[i] = JSON.parse(JSON.stringify(t));
-                // Stamp migrated tasks with now so they're newer than cloud's old Today tasks
-                db.today[i].u = Date.now();
-            }
-        });
-        db.lastActiveDate = todayStr;
-        save();
-        return true; // reset happened
-    }
-    return false; // no reset needed
-}
-
+/* ═══════════════════════════════════════
+   DAY RESET
+═══════════════════════════════════════ */
 function isDesktop() { return window.innerWidth >= 900; }
 
 /* ═══════════════════════════════════════
-   SUPABASE CLIENT
+   SUPABASE — using official JS client
+   Loaded from CDN in <head>.
+   For local-only users (no session), the
+   client is never initialised and costs nothing.
 ═══════════════════════════════════════ */
-let supaSession = null;
+const SUPA_URL = 'https://dxplietmqbpncikyhwve.supabase.co';
+const SUPA_KEY = 'sb_publishable_1yrXYKJBq8O51o_PFw7HhQ_qMS_R99-';
 
-async function supaFetch(path, method='GET', body=null, token=null, extra={}) {
-    const headers = {
-        'apikey': SUPA_KEY,
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (token || SUPA_KEY),
-        ...extra
-    };
-    const res = await fetch(SUPA_URL + path, { method, headers, body: body ? JSON.stringify(body) : null });
-    if (!res.ok) throw new Error(await res.text());
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-}
+let supaClient  = null; // Supabase JS client instance — null until authenticated
+let supaSession = null; // current auth session
+let realtimeChannel = null; // active Realtime subscription
 
-async function supaUpsert(table, rows, conflictCols) {
-    if (!rows || rows.length === 0) return;
-    const url = `${SUPA_URL}/rest/v1/${table}?on_conflict=${encodeURIComponent(conflictCols)}`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'apikey': SUPA_KEY,
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + supaSession.access_token,
-            'Prefer': 'resolution=merge-duplicates,return=minimal'
-        },
-        body: JSON.stringify(rows)
-    });
-    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-}
-
-async function supaSelect(table, query) {
-    return supaFetch(`/rest/v1/${table}?${query}`, 'GET', null, supaSession.access_token, { 'Prefer': 'return=representation' });
-}
-
-/* ── Auth ── */
-async function sendMagicLink(email) {
-    const res = await fetch(`${SUPA_URL}/auth/v1/otp`, {
-        method: 'POST',
-        headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, create_user: true })
-    });
-    if (!res.ok) throw new Error(await res.text());
-}
-
-async function exchangeToken(access, refresh) {
-    localStorage.setItem(STORAGE_KEY+'_supa_access', access);
-    localStorage.setItem(STORAGE_KEY+'_supa_refresh', refresh);
-    supaSession = { access_token: access, refresh_token: refresh };
-}
-
-async function refreshSession() {
-    const refresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
-    if (!refresh) return false;
-    try {
-        const res = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
-            method: 'POST',
-            headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refresh })
+function getSupaClient() {
+    if (!supaClient && window.supabase) {
+        supaClient = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                storageKey: STORAGE_KEY + '_supa'
+            }
         });
-        if (!res.ok) return false;
-        const data = await res.json();
-        await exchangeToken(data.access_token, data.refresh_token);
-        return true;
-    } catch(e) { return false; }
-}
-
-function clearSession() {
-    localStorage.removeItem(STORAGE_KEY+'_supa_access');
-    localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
-    supaSession = null;
+        // Listen to auth state changes — this is how we know when the session
+        // is refreshed automatically, and keep supaSession in sync
+        supaClient.auth.onAuthStateChange((event, session) => {
+            supaSession = session;
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                updateSyncUI();
+                if (!realtimeChannel) startRealtime();
+            }
+            if (event === 'SIGNED_OUT') {
+                supaSession = null;
+                stopRealtime();
+                updateSyncUI();
+                const el = document.getElementById('sync-indicator');
+                if (el) el.classList.remove('visible');
+            }
+        });
+    }
+    return supaClient;
 }
 
 function getUserId() {
@@ -439,69 +389,52 @@ function getUserId() {
     catch(e) { return null; }
 }
 
+/* ── Auth ── */
+async function sendMagicLink(email) {
+    const client = getSupaClient();
+    if (!client) throw new Error('Supabase not loaded');
+    const { error } = await client.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    if (error) throw new Error(error.message);
+}
+
+async function storeSession(session) {
+    supaSession = session;
+    // No manual localStorage needed — client handles it via persistSession
+}
+
+function clearSession() {
+    supaSession = null;
+    // Also remove our old manual keys in case they exist
+    localStorage.removeItem(STORAGE_KEY+'_supa_access');
+    localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
+}
+
 /* ═══════════════════════════════════════
-   SYNC ENGINE — UUID-based
-   
-   Supabase schema (new):
-   ledger_tasks_v2:
-     task_id     text (UUID, primary key per user)
-     user_id     uuid
-     list        text
-     position    integer (0-9, display order)
-     t           text
-     s           integer
-     c           integer
-     updated_at  bigint
-     unique(user_id, task_id)
-   
-   ledger_order_v2:
-     user_id     uuid
-     list        text
-     order_json  text (JSON array of task_ids in order)
-     updated_at  bigint
-     unique(user_id, list)
-   
-   ledger_archive (unchanged)
+   PUSH — write local state to cloud
+   Called after every user action (debounced).
 ═══════════════════════════════════════ */
+let pushTimer = null;
 
-let syncPushTimer = null;
-
-function scheduleSyncPush() {
-    clearTimeout(syncPushTimer);
-    syncPushTimer = setTimeout(() => {
-        if (document.activeElement && document.activeElement.tagName === 'INPUT') {
-            scheduleSyncPush(); return;
-        }
-        syncPush().catch(() => {});
-    }, 2000);
+function schedulePush() {
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => doPush().catch(e => console.error('push:', e)), 1500);
 }
 
-function setSyncStatus(state, label) {
-    const el = document.getElementById('sync-indicator');
-    const lb = document.getElementById('sync-label');
-    if (!el) return;
-    el.className = 'visible ' + state;
-    lb.textContent = label;
-    if (state === 'synced') setTimeout(() => el.classList.remove('visible'), 3000);
-}
-
-async function syncPush() {
-    if (!supaSession) return;
-    const userId = getUserId();
-    if (!userId) return;
+async function doPush() {
+    const client = getSupaClient();
+    if (!supaSession || !client) return;
+    const uid = getUserId(); if (!uid) return;
     setSyncStatus('syncing', 'Syncing…');
     try {
-        const now = Date.now();
+        // Tasks — one row per slot
         const taskRows = [];
         COLS.forEach(list => {
-            db[list].forEach((task, position) => {
-                if (!task.id) task.id = uuid();
-                if (task.t.trim() !== '' && !task.u) task.u = now;
+            db[list].forEach((task, pos) => {
                 taskRows.push({
-                    task_id:    task.id,
-                    user_id:    userId,
-                    list:       list,
-                    position:   position,
+                    task_id:    task.id || uuid(),
+                    user_id:    uid,
+                    list,
+                    position:   pos,
                     t:          task.t,
                     s:          task.s,
                     c:          task.c,
@@ -509,365 +442,313 @@ async function syncPush() {
                 });
             });
         });
+        const { error: taskErr } = await client
+            .from('ledger_tasks_v2')
+            .upsert(taskRows, { onConflict: 'user_id,list,position' });
+        if (taskErr) throw new Error(taskErr.message);
 
-        const taskUrl = `${SUPA_URL}/rest/v1/ledger_tasks_v2?on_conflict=${encodeURIComponent('user_id,task_id')}`;
-        const taskRes = await fetch(taskUrl, {
-            method: 'POST',
-            headers: {
-                'apikey': SUPA_KEY,
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + supaSession.access_token,
-                'Prefer': 'resolution=merge-duplicates,return=minimal'
-            },
-            body: JSON.stringify(taskRows)
-        });
-        if (!taskRes.ok) throw new Error(`tasks: ${taskRes.status}: ${await taskRes.text()}`);
-
-        // Always push order — it's small and ensures other devices get correct sequence
-        const localMaxTs = Math.max(0, ...COLS.flatMap(list => db[list].map(t => t.u||0)));
-        const orderRows = COLS.map(list => ({
-            user_id:    userId,
-            list:       list,
-            order_json: JSON.stringify(db[list].map(t => t.id)),
-            updated_at: localMaxTs || now
-        }));
-        await supaUpsert('ledger_order_v2', orderRows, 'user_id,list');
-        orderDirty = false;
-
-        // Push archive
+        // Archive
         if (db.archive.length > 0) {
-            const archiveMap = new Map();
-            db.archive.forEach(entry => {
-                const k = entry.key || entry.d;
-                const existing = archiveMap.get(k);
-                const count = (entry.tasks||[]).filter(t=>t.t.trim()!=='').length;
-                const existCount = existing ? (existing.tasks||[]).filter(t=>t.t.trim()!=='').length : -1;
-                if (!existing || count > existCount || (entry.u||0) > (existing.updated_at||0)) {
-                    archiveMap.set(k, { user_id: userId, day_key: k, tasks: entry.tasks, updated_at: entry.u||0 });
+            const seen = new Map();
+            db.archive.forEach(e => {
+                const k = e.key || e.d;
+                if (k === 'meta_backup') return;
+                const existing = seen.get(k);
+                const count = (e.tasks||[]).filter(t=>t.t.trim()!=='').length;
+                if (!existing || count > (existing._count||0)) {
+                    seen.set(k, { user_id: uid, day_key: k, tasks: e.tasks, updated_at: e.u||0, _count: count });
                 }
             });
-            await supaUpsert('ledger_archive', Array.from(archiveMap.values()), 'user_id,day_key');
+            const rows = [...seen.values()].map(({_count,...r})=>r);
+            const { error: archErr } = await client
+                .from('ledger_archive')
+                .upsert(rows, { onConflict: 'user_id,day_key' });
+            if (archErr) throw new Error(archErr.message);
         }
 
         setSyncStatus('synced', 'Synced');
     } catch(e) {
-        console.error('syncPush error:', e.message);
-        // Try refreshing session once — but don't loop
-        const refreshed = await refreshSession();
-        if (refreshed) {
-            // Retry once with fresh token
-            try {
-                await syncPush();
-            } catch(e2) {
-                console.error('syncPush retry failed:', e2.message);
-                setSyncStatus('error', 'Sync failed');
-                showSyncError(e2.message);
-            }
-        } else {
-            setSyncStatus('error', 'Sync failed');
-            showSyncError(e.message);
-        }
+        console.error('doPush:', e.message);
+        setSyncStatus('error', e.message);
     }
 }
 
-async function syncPull(force=false) {
-    if (!supaSession) return false;
-    const userId = getUserId();
-    if (!userId) return false;
+/* ═══════════════════════════════════════
+   PULL — replace local with full cloud state
+   Called on load and on visibility restore.
+   Cloud wins unconditionally.
+═══════════════════════════════════════ */
+async function doPull() {
+    const client = getSupaClient();
+    if (!supaSession || !client) return false;
+    const uid = getUserId(); if (!uid) return false;
     setSyncStatus('syncing', 'Syncing…');
     try {
-        let changed = false;
+        const { data: tasks, error: tErr } = await client
+            .from('ledger_tasks_v2')
+            .select('task_id,list,position,t,s,c,updated_at')
+            .eq('user_id', uid);
+        if (tErr) throw new Error(tErr.message);
 
-        const remoteTasks = await supaSelect('ledger_tasks_v2',
-            `select=task_id,list,position,t,s,c,updated_at&user_id=eq.${userId}`
-        );
-        const remoteOrder = await supaSelect('ledger_order_v2',
-            `select=list,order_json,updated_at&user_id=eq.${userId}`
-        );
-        const remoteArchive = await supaSelect('ledger_archive',
-            `select=day_key,tasks,updated_at&user_id=eq.${userId}`
-        );
+        const { data: archive, error: aErr } = await client
+            .from('ledger_archive')
+            .select('day_key,tasks,updated_at')
+            .eq('user_id', uid);
+        if (aErr) throw new Error(aErr.message);
 
-        if (remoteTasks && remoteTasks.length > 0) {
-            const remoteMap = new Map();
-            remoteTasks.forEach(row => remoteMap.set(row.task_id, row));
-
-            COLS.forEach(list => {
-                const localMap = new Map();
-                db[list].forEach(task => localMap.set(task.id, task));
-
-                // Merge tasks by UUID — remote wins if newer, or if force=true
-                remoteMap.forEach((row, taskId) => {
-                    if (row.list !== list) return;
-                    const local = localMap.get(taskId);
-                    const remoteTs = row.updated_at || 0;
-                    if (!local) {
-                        localMap.set(taskId, { id: taskId, t: row.t, s: row.s, c: row.c, u: remoteTs });
-                        changed = true;
-                    } else if (force || remoteTs > (local.u || 0)) {
-                        local.t = row.t; local.s = row.s; local.c = row.c; local.u = remoteTs;
-                        changed = true;
-                    }
-                });
-
-                // Apply remote order
-                const orderRow = remoteOrder && remoteOrder.find(r => r.list === list);
-                if (orderRow) {
-                    try {
-                        const remoteIds = JSON.parse(orderRow.order_json);
-                        const localOrderTs = db[list].reduce((max, t) => Math.max(max, t.u||0), 0);
-                        if (force || (orderRow.updated_at||0) >= localOrderTs) {
-                            const newList = remoteIds.map(id => {
-                                return localMap.get(id) || { id, t:'', s:0, c:0, u:0 };
-                            });
-                            while (newList.length < 10) newList.push(makeEmptySlot());
-                            db[list] = newList.slice(0, 10);
-                            changed = true;
-                        }
-                    } catch(e) {}
-                } else if (force) {
-                    // No order row yet — reconstruct list from remote tasks sorted by position
-                    const listTasks = [];
-                    remoteMap.forEach((row, taskId) => {
-                        if (row.list !== list) return;
-                        listTasks.push({ id: taskId, t: row.t, s: row.s, c: row.c, u: row.updated_at||0, _pos: row.position||0 });
-                    });
-                    if (listTasks.length > 0) {
-                        listTasks.sort((a,b) => a._pos - b._pos);
-                        listTasks.forEach(t => delete t._pos);
-                        // Fill remaining slots
-                        while (listTasks.length < 10) listTasks.push(makeEmptySlot());
-                        db[list] = listTasks.slice(0, 10);
-                        changed = true;
-                    }
-                }
-            });
-        }
-
-        if (remoteArchive && remoteArchive.length > 0) {
-            remoteArchive.forEach(row => {
-                // Match by unique key first, fall back to display date for old entries
-                const existing = db.archive.find(e => (e.key||e.d) === row.day_key);
-                if (!existing) {
-                    // Parse display date from key (format: "Apr 22, 2025::timestamp" or just "Apr 22, 2025")
-                    const displayDate = row.day_key.includes('::') ? row.day_key.split('::')[0] : row.day_key;
-                    db.archive.push({ d: displayDate, key: row.day_key, tasks: addMissingIds(row.tasks || []), u: row.updated_at||0 });
-                    changed = true;
-                } else if (force || (row.updated_at||0) > (existing.u||0)) {
-                    existing.tasks = addMissingIds(row.tasks || []);
-                    existing.u = row.updated_at||0;
-                    existing.key = row.day_key;
-                    changed = true;
-                }
-            });
-            if (changed) db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
-        }
-
-        if (changed) {
-            localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
-            localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next));
-            localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
-            localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
-        }
-
-        setSyncStatus('synced', 'Synced');
-        return changed;
-    } catch(e) {
-        console.error('syncPull error:', e.message);
-        const refreshed = await refreshSession();
-        if (refreshed) {
-            try { return await syncPull(force); }
-            catch(e2) {
-                setSyncStatus('error', 'Sync failed');
-                showSyncError(e2.message);
-                return false;
-            }
-        } else {
-            setSyncStatus('error', 'Sync failed');
-            showSyncError(e.message);
+        if (!tasks || tasks.length === 0) {
+            setSyncStatus('synced', 'Synced');
             return false;
         }
-    }
-}
 
-/* ── Auth flow ── */
-async function handleAuthRedirect() {
-    const hash = window.location.hash;
-    if (!hash || hash.length < 2) return;
-    const params = new URLSearchParams(hash.substring(1));
-    const access = params.get('access_token');
-    const refresh = params.get('refresh_token');
-    if (access && refresh) {
-        await exchangeToken(access, refresh);
-        history.replaceState(null, '', window.location.pathname);
-        updateSyncUI();
-        const card = document.getElementById('card');
-        if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
-        // Pull cloud data first, then run day reset with fresh data
-        await syncPull(true);
-        checkDayReset();
-        showToast('Sync enabled');
-        startSyncPoll();
-        render();
-    }
-}
-
-async function restoreSession() {
-    const access  = localStorage.getItem(STORAGE_KEY+'_supa_access');
-    const refresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
-    if (access && refresh) {
-        supaSession = { access_token: access, refresh_token: refresh };
-        updateSyncUI();
-        startSyncPoll();
-        setTimeout(async () => {
-            // Pull first to get latest cloud state
-            await syncPull(true);
-            // Run day reset — this may clear Today if the date has changed
-            const wasReset = checkDayReset();
-            if (wasReset) {
-                // Push the fresh Today card immediately so cloud is also updated
-                // and future polls don't restore yesterday's completed tasks
-                await syncPush();
-            }
-            render();
-        }, 500);
-    } else {
-        checkDayReset();
-        render();
-    }
-}
-
-/* ── Manual sync controls ── */
-async function forcePush() {
-    if (!supaSession) { showToast('Not signed in to sync'); return; }
-    showToast('Pushing…');
-    await syncPush();
-}
-
-async function forcePull() {
-    if (!supaSession) { showToast('Not signed in to sync'); return; }
-    const userId = getUserId();
-    if (!userId) { showToast('Bad session'); return; }
-    // Check there's actually something to pull first
-    try {
-        const remoteTasks = await supaSelect('ledger_tasks_v2',
-            `select=task_id&user_id=eq.${userId}&limit=1`
-        );
-        if (!remoteTasks || remoteTasks.length === 0) {
-            showToast('No data in cloud yet — push from phone first');
-            return;
-        }
-    } catch(e) { showToast('Could not reach cloud'); return; }
-    const changed = await syncPull();
-    if (changed) render();
-    showToast('Pull complete');
-}
-
-async function forceOverwrite() {
-    if (!supaSession) { showToast('Not signed in to sync'); return; }
-    if (!confirm('Overwrite all local data with cloud data? This cannot be undone.')) return;
-    const userId = getUserId();
-    if (!userId) return;
-    setSyncStatus('syncing', 'Syncing…');
-    try {
-        const remoteTasks = await supaSelect('ledger_tasks_v2',
-            `select=task_id,list,position,t,s,c,updated_at&user_id=eq.${userId}`
-        );
-        const remoteOrder = await supaSelect('ledger_order_v2',
-            `select=list,order_json&user_id=eq.${userId}`
-        );
-        if (remoteTasks) {
-            const byList = { today: new Map(), next: new Map(), someday: new Map() };
-            remoteTasks.forEach(row => {
-                if (byList[row.list]) byList[row.list].set(row.task_id, row);
+        // Rebuild lists from cloud
+        const byList = { today: [], next: [], someday: [] };
+        tasks.forEach(row => { if (byList[row.list]) byList[row.list].push(row); });
+        COLS.forEach(list => {
+            const rows = byList[list];
+            if (rows.length === 0) return;
+            rows.sort((a,b) => a.position - b.position);
+            const newList = makeList();
+            rows.forEach(row => {
+                const pos = Math.min(row.position, 9);
+                newList[pos] = { id: row.task_id, t: row.t, s: row.s, c: row.c, u: row.updated_at||0 };
             });
-            COLS.forEach(list => {
-                const orderRow = remoteOrder && remoteOrder.find(r => r.list === list);
-                if (orderRow) {
-                    try {
-                        const ids = JSON.parse(orderRow.order_json);
-                        db[list] = ids.map(id => {
-                            const r = byList[list].get(id);
-                            return r ? { id: r.task_id, t: r.t, s: r.s, c: r.c, u: r.updated_at||0 } : makeEmptySlot();
-                        });
-                        while (db[list].length < 10) db[list].push(makeEmptySlot());
-                        db[list] = db[list].slice(0, 10);
-                    } catch(e) {}
-                }
+            db[list] = newList;
+        });
+
+        // Archive — fully replace from cloud, skipping only tombstoned entries
+        if (archive && archive.length > 0) {
+            // Build a map of what's in the cloud
+            const cloudMap = new Map();
+            archive.forEach(row => {
+                if (row.day_key === 'meta_backup') return;
+                if (deletedArchiveKeys.has(row.day_key)) return;
+                const displayDate = row.day_key.includes('::') ? row.day_key.split('::')[0] : row.day_key;
+                cloudMap.set(row.day_key, { d: displayDate, key: row.day_key, tasks: ensureIds(row.tasks||[]), u: row.updated_at||0 });
             });
-        }
-        const archive = await supaSelect('ledger_archive', `select=day_key,tasks,updated_at&user_id=eq.${userId}`);
-        if (archive) {
-            db.archive = archive.map(r => {
-                const displayDate = r.day_key.includes('::') ? r.day_key.split('::')[0] : r.day_key;
-                return { d: displayDate, key: r.day_key, tasks: addMissingIds(r.tasks||[]), u: r.updated_at||0 };
+            // Keep local entries not in cloud (newly committed, not yet pushed)
+            // but replace everything that cloud knows about
+            const localOnlyEntries = db.archive.filter(e => {
+                const k = e.key || e.d;
+                return !cloudMap.has(k) && !deletedArchiveKeys.has(k);
             });
+            db.archive = [...cloudMap.values(), ...localOnlyEntries];
             db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
         }
-        localStorage.setItem(STORAGE_KEY+'_t', JSON.stringify(db.today));
-        localStorage.setItem(STORAGE_KEY+'_n', JSON.stringify(db.next));
-        localStorage.setItem(STORAGE_KEY+'_s', JSON.stringify(db.someday));
-        localStorage.setItem(STORAGE_KEY+'_a', JSON.stringify(db.archive));
+
+        saveLocal();
         setSyncStatus('synced', 'Synced');
-        showToast('Restored from cloud');
-        render();
+        return true;
     } catch(e) {
-        console.error('forceOverwrite:', e.message);
-        setSyncStatus('error', 'Restore failed');
-        showToast('Error: ' + e.message.substring(0, 60));
+        console.error('doPull:', e.message);
+        setSyncStatus('error', e.message);
+        return false;
     }
 }
 
-/* ── Sync UI ── */
-function updateSyncUI() {
-    const show = supaSession ? 'block' : 'none';
-    ['sync-push-item','sync-pull-item','sync-overwrite-item','sync-signout-item'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = show;
-    });
+/* ═══════════════════════════════════════
+   REALTIME — subscribe to changes from
+   other devices. Replaces the 30-second poll.
+   Fires only when Supabase detects a change
+   to this user's rows — zero idle disk IO.
+═══════════════════════════════════════ */
+function startRealtime() {
+    const client = getSupaClient();
+    if (!client || !supaSession) return;
+    const uid = getUserId(); if (!uid) return;
+
+    // Clean up any existing channel
+    if (realtimeChannel) { client.removeChannel(realtimeChannel); realtimeChannel = null; }
+
+    realtimeChannel = client.channel('ledger-sync')
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'ledger_tasks_v2',
+            filter: `user_id=eq.${uid}`
+        }, () => {
+            // A change arrived from another device
+            // Only apply if this device hasn't made local changes in the last 10s
+            if (Date.now() - lastLocalChange < 10000) return;
+            doPull().then(changed => { if (changed) render(); }).catch(() => {});
+        })
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'ledger_archive',
+            filter: `user_id=eq.${uid}`
+        }, () => {
+            if (Date.now() - lastLocalChange < 10000) return;
+            doPull().then(changed => { if (changed) render(); }).catch(() => {});
+        })
+        .subscribe(status => {
+            if (status === 'SUBSCRIBED') {
+                setSyncStatus('synced', 'Synced');
+            }
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                console.warn('Realtime issue:', status);
+                setSyncStatus('error', 'Realtime disconnected — ' + status);
+                // Fall back to a single pull on error
+                doPull().then(changed => { if (changed) render(); }).catch(() => {});
+            }
+        });
 }
 
-function signOut() {
-    clearSession(); updateSyncUI();
-    document.getElementById('sync-indicator').classList.remove('visible');
-    closeAll(); showToast('Signed out of sync');
+function stopRealtime() {
+    const client = getSupaClient();
+    if (client && realtimeChannel) {
+        client.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+    }
 }
 
-/* ── Poll ── */
-let syncPollTimer = null;
+/* ── Visibility change — pull on return after absence ── */
 let lastHiddenAt = null;
-
-function startSyncPoll() {
-    if (syncPollTimer) clearInterval(syncPollTimer);
-    syncPollTimer = setInterval(() => {
-        if (!supaSession || (document.activeElement && document.activeElement.tagName === 'INPUT')) return;
-        syncPull(false).then(changed => { if (changed) render(); }).catch(() => {});
-    }, 30000);
-}
-
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-        lastHiddenAt = Date.now();
-        return;
-    }
-    if (document.visibilityState === 'visible' && supaSession) {
-        // If away for more than 5 minutes, treat like a fresh load — force pull
-        const awayMs = lastHiddenAt ? Date.now() - lastHiddenAt : Infinity;
-        const force = awayMs > 5 * 60 * 1000;
-        syncPull(force).then(changed => { if (changed) render(); }).catch(() => {});
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'hidden') { lastHiddenAt = Date.now(); return; }
+    if (document.visibilityState === 'visible') {
+        // Re-check session — the JS client may have lost it if tab was suspended
+        if (!supaSession) {
+            await restoreSession();
+            return;
+        }
+        const away = lastHiddenAt ? Date.now() - lastHiddenAt : Infinity;
+        if (away > 5 * 60 * 1000 && Date.now() - lastLocalChange > 10000) {
+            doPull().then(changed => { if (changed) render(); }).catch(() => {});
+        }
     }
 });
 
-/* ── Auth UI ── */
+/* ── Manual sync actions ── */
+async function forcePush() {
+    if (!supaSession) { showToast('Not signed in'); return; }
+    await doPush();
+}
+async function forcePull() {
+    if (!supaSession) { showToast('Not signed in'); return; }
+    const changed = await doPull();
+    if (changed) render();
+    showToast('Pull complete');
+}
+async function forceOverwrite() {
+    if (!supaSession) { showToast('Not signed in'); return; }
+    if (!confirm('Overwrite all local data with cloud data? This cannot be undone.')) return;
+    const client = getSupaClient();
+    if (!client) { showToast('Client not ready'); return; }
+    const uid = getUserId(); if (!uid) { showToast('No user session'); return; }
+    setSyncStatus('syncing', 'Restoring…');
+    try {
+        // Fetch tasks
+        const { data: tasks, error: tErr } = await client
+            .from('ledger_tasks_v2')
+            .select('task_id,list,position,t,s,c,updated_at')
+            .eq('user_id', uid);
+        if (tErr) throw new Error('Tasks: ' + tErr.message);
+
+        // Fetch archive
+        const { data: archive, error: aErr } = await client
+            .from('ledger_archive')
+            .select('day_key,tasks,updated_at')
+            .eq('user_id', uid);
+        if (aErr) throw new Error('Archive: ' + aErr.message);
+
+        // Replace tasks
+        if (tasks && tasks.length > 0) {
+            const byList = { today: [], next: [], someday: [] };
+            tasks.forEach(row => { if (byList[row.list]) byList[row.list].push(row); });
+            COLS.forEach(list => {
+                const rows = byList[list];
+                if (rows.length === 0) return;
+                rows.sort((a,b) => a.position - b.position);
+                const newList = makeList();
+                rows.forEach(row => {
+                    const pos = Math.min(row.position, 9);
+                    newList[pos] = { id: row.task_id, t: row.t, s: row.s, c: row.c, u: row.updated_at||0 };
+                });
+                db[list] = newList;
+            });
+        }
+
+        // Replace archive completely — no local entries survive
+        deletedArchiveKeys = new Set();
+        localStorage.setItem(STORAGE_KEY+'_deleted_arc', '[]');
+        db.archive = [];
+        if (archive && archive.length > 0) {
+            archive.forEach(row => {
+                if (row.day_key === 'meta_backup') return;
+                const displayDate = row.day_key.includes('::') ? row.day_key.split('::')[0] : row.day_key;
+                db.archive.push({ d: displayDate, key: row.day_key, tasks: ensureIds(row.tasks||[]), u: row.updated_at||0 });
+            });
+            db.archive.sort((a,b) => new Date(a.d) - new Date(b.d));
+        }
+
+        saveLocal();
+        setSyncStatus('synced', 'Synced');
+        showToast(`Restored: ${db.archive.length} archive entries`);
+        render();
+    } catch(e) {
+        console.error('forceOverwrite:', e.message);
+        setSyncStatus('error', e.message);
+        showToast('Restore failed — tap sync dot for details');
+    }
+}
+
+/* ── Sync indicator ── */
+let syncHideTimer = null;
+let lastSyncError = '';
+
+function setSyncStatus(state, label) {
+    const el = document.getElementById('sync-indicator');
+    if (!el) return;
+    clearTimeout(syncHideTimer);
+    el.className = 'visible ' + state;
+    el.onclick = null;
+    if (state === 'error') {
+        lastSyncError = label;
+        el.onclick = () => {
+            const panel = document.getElementById('sync-error-panel');
+            document.getElementById('sync-error-panel-msg').textContent = label;
+            panel.classList.toggle('visible');
+        };
+    } else {
+        document.getElementById('sync-error-panel')?.classList.remove('visible');
+    }
+}
+
+function updateSyncUI() {
+    const show = supaSession ? 'block' : 'none';
+    ['sync-push-item','sync-pull-item','sync-overwrite-item','sync-signout-item'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = show;
+    });
+    if (supaSession) setSyncStatus('synced', '');
+}
+
+function signOut() {
+    stopRealtime();
+    clearSession();
+    const client = getSupaClient();
+    if (client) client.auth.signOut().catch(() => {});
+    updateSyncUI();
+    const el = document.getElementById('sync-indicator');
+    if (el) el.classList.remove('visible');
+    document.getElementById('sync-error-panel')?.classList.remove('visible');
+    closeAll(); showToast('Signed out');
+}
+
+/* ── Auth flow ── */
 let longPressTimer = null;
 function attachLongPress(el) {
     if (!el) return;
     el.style.userSelect = 'none'; el.style.webkitUserSelect = 'none'; el.style.cursor = 'default';
-    const start = e => { e.preventDefault(); longPressTimer = setTimeout(() => { supaSession ? showToast('Already signed in to sync') : (isDesktop() ? dtCloseLedger() : null, openAuthModal()); }, 3000); };
+    const start = e => {
+        e.preventDefault();
+        longPressTimer = setTimeout(() => {
+            supaSession ? showToast('Already signed in') : openAuthModal();
+        }, 3000);
+    };
     const cancel = () => clearTimeout(longPressTimer);
     el.addEventListener('touchstart', start, { passive: false });
-    el.addEventListener('touchend', cancel); el.addEventListener('touchmove', cancel); el.addEventListener('touchcancel', cancel);
-    el.addEventListener('pointerdown', start); el.addEventListener('pointerup', cancel); el.addEventListener('pointerleave', cancel);
+    ['touchend','touchmove','touchcancel','pointerup','pointerleave'].forEach(ev => el.addEventListener(ev, cancel));
     el.addEventListener('contextmenu', e => e.preventDefault());
 }
 attachLongPress(document.getElementById('drawer-ledger-title'));
@@ -891,11 +772,119 @@ async function submitMagicLink() {
         await sendMagicLink(email);
         msg.textContent = 'Check your email for a magic link.';
     } catch(e) {
-        let err = e.message || 'Unknown error';
-        try { const p = JSON.parse(err); err = p.error_description || p.msg || p.message || err; } catch(_) {}
-        msg.textContent = 'Error: ' + err;
+        msg.textContent = 'Error: ' + e.message;
         btn.disabled = false;
     }
+}
+
+async function handleAuthRedirect() {
+    const hash = window.location.hash;
+    if (!hash || hash.length < 2) return false;
+    const params = new URLSearchParams(hash.substring(1));
+    const access  = params.get('access_token');
+    const refresh = params.get('refresh_token');
+    if (!access || !refresh) return false;
+
+    const client = getSupaClient();
+    if (!client) return false;
+
+    const { data, error } = await client.auth.setSession({
+        access_token:  access,
+        refresh_token: refresh
+    });
+    if (error || !data?.session) return false;
+
+    await storeSession(data.session);
+    history.replaceState(null, '', window.location.pathname);
+    updateSyncUI();
+    const card = document.getElementById('card');
+    if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
+    await doPull();
+    startRealtime();
+    showToast('Sync enabled');
+    render();
+    return true;
+}
+
+async function restoreSession() {
+    const client = getSupaClient(); // initializes client and auth listener
+    if (!client) return;
+
+    // Show dot immediately while we check
+    const el = document.getElementById('sync-indicator');
+    if (el) el.className = 'visible syncing';
+
+    // Ask the client for its own stored session — it handles refresh automatically
+    const { data: { session }, error } = await client.auth.getSession();
+    if (error || !session) {
+        // No valid session — check if we have old manual tokens to migrate
+        const oldAccess  = localStorage.getItem(STORAGE_KEY+'_supa_access');
+        const oldRefresh = localStorage.getItem(STORAGE_KEY+'_supa_refresh');
+        if (oldAccess && oldRefresh) {
+            const { data, error: setErr } = await client.auth.setSession({
+                access_token:  oldAccess,
+                refresh_token: oldRefresh
+            });
+            if (setErr || !data?.session) {
+                // Old tokens are expired — need to sign in again
+                if (el) el.classList.remove('visible');
+                localStorage.removeItem(STORAGE_KEY+'_supa_access');
+                localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
+                return;
+            }
+            supaSession = data.session;
+            // Clean up old keys — client now manages its own
+            localStorage.removeItem(STORAGE_KEY+'_supa_access');
+            localStorage.removeItem(STORAGE_KEY+'_supa_refresh');
+        } else {
+            if (el) el.classList.remove('visible');
+            return;
+        }
+    } else {
+        supaSession = session;
+    }
+
+    updateSyncUI();
+    setTimeout(async () => {
+        const changed = await doPull();
+        if (changed) render();
+        startRealtime();
+    }, 400);
+}
+
+/* ── Backup timestamp sync ── */
+async function syncBackupTimestamp() {
+    const client = getSupaClient();
+    if (!supaSession || !client) return;
+    const uid = getUserId(); if (!uid) return;
+    try {
+        const { data } = await client
+            .from('ledger_archive')
+            .select('updated_at')
+            .eq('user_id', uid)
+            .eq('day_key', 'meta_backup')
+            .single();
+        if (data) {
+            const remoteTs = data.updated_at || 0;
+            const localTs  = parseInt(localStorage.getItem(STORAGE_KEY+'_lastBackup')) || 0;
+            if (remoteTs > localTs) {
+                localStorage.setItem(STORAGE_KEY+'_lastBackup', remoteTs.toString());
+                dismissBanner();
+            }
+        }
+    } catch(e) { /* non-critical */ }
+}
+
+async function pushBackupTimestamp(ts) {
+    const client = getSupaClient();
+    if (!supaSession || !client) return;
+    const uid = getUserId(); if (!uid) return;
+    try {
+        await client.from('ledger_archive').upsert(
+            [{ user_id: uid, day_key: 'meta_backup', tasks: [], updated_at: ts }],
+            { onConflict: 'user_id,day_key' }
+        );
+    } catch(e) { /* non-critical */ }
 }
 
 /* ═══════════════════════════════════════
@@ -926,20 +915,20 @@ function buildTaskRow(item, i, colKey, readonly) {
         dotsHTML += '</div>';
     }
     const handle = readonly ? '' : `<span class="hndl" onpointerdown="startDrag(event,${i},'${colKey}')"><svg viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/></svg></span>`;
-    li.innerHTML = `<div class="${btnClass}" onclick="tglItem(${i},'${colKey}')">${icon}</div><div class="inp-wrap"><input type="text" value="${cleanText.replace(/"/g,'&quot;')}" oninput="updItem(${i},this.value,'${colKey}')" onkeydown="onTaskKey(event,${i},'${colKey}')" onblur="onTaskBlur(${i},'${colKey}')" class="${item.s==2?'done':''}" ${readonly?'readonly':''}>${dotsHTML}</div><div class="ctrls"><span class="dots" onclick="openM(${i},'${colKey}')">&#8942;</span>${handle}</div>`;
+    li.innerHTML = `<div class="${btnClass}" onclick="tglItem(${i},'${colKey}')">${icon}</div><div class="inp-wrap"><input type="text" value="${cleanText.replace(/"/g,'&quot;')}" oninput="typingItem(${i},this.value,'${colKey}')" onkeydown="onTaskKey(event,${i},'${colKey}')" onblur="onTaskBlur(${i},'${colKey}')" class="${item.s==2?'done':''}" ${readonly?'readonly':''}>${dotsHTML}</div><div class="ctrls"><span class="dots" onclick="openM(${i},'${colKey}')">&#8942;</span>${handle}</div>`;
     return li;
 }
 
 /* ═══════════════════════════════════════
-   BUILD LEDGER CONTENTS
+   LEDGER CONTENTS
 ═══════════════════════════════════════ */
 function buildLedgerContents(containerEl, focusEntry) {
     containerEl.innerHTML = '';
     if (focusEntry) {
-        const hasTasks = focusEntry.tasks.some(t => t.t.trim() !== '');
+        const hasTasks = focusEntry.tasks.some(t=>t.t.trim()!=='');
         if (!hasTasks) { containerEl.innerHTML = `<div style="padding:30px 24px;font-family:'Cormorant Garamond',serif;font-size:16px;color:rgba(0,0,0,0.35);letter-spacing:1px;">No tasks recorded.</div>`; return; }
         const ul = document.createElement('ul');
-        focusEntry.tasks.forEach((item, realIdx) => {
+        focusEntry.tasks.forEach((item,realIdx) => {
             if (!item.t.trim()) return;
             ul.appendChild(buildTaskRow(item, realIdx, 'arc', true));
         });
@@ -948,18 +937,17 @@ function buildLedgerContents(containerEl, focusEntry) {
     }
     if (db.archive.length === 0) { containerEl.innerHTML = `<div style="padding:40px 24px;text-align:center;font-family:'Cormorant Garamond',serif;font-size:18px;color:rgba(0,0,0,0.35);letter-spacing:1px;">No entries yet.</div>`; return; }
     const { groups, order } = groupArchiveByMonth(db.archive);
-    const currentMonthKey = getCurrentMonthKey();
+    const curMonth = getCurrentMonthKey();
     [...order].reverse().forEach(monthKey => {
         const entries = groups[monthKey];
         const details = document.createElement('details');
         details.className = 'month-stack';
-        if (monthKey === currentMonthKey) details.open = true;
+        if (monthKey === curMonth) details.open = true;
         const summary = document.createElement('summary');
         summary.innerHTML = `<span>${monthKey}</span><span class="stack-count">${entries.length} day${entries.length!==1?'s':''}</span>`;
         details.appendChild(summary);
-        [...entries].reverse().forEach(({ entry, realIdx }) => {
-            const r = document.createElement('div');
-            r.className = 'ledger-item';
+        [...entries].reverse().forEach(({entry,realIdx}) => {
+            const r = document.createElement('div'); r.className = 'ledger-item';
             r.innerHTML = `<div class="ledger-date" onclick="viewArc(${realIdx})">${entry.d}</div><div class="ledger-ctrls"><div class="ledger-btn ledger-undo" onclick="undoFin(${realIdx})"><svg viewBox="0 0 24 24" stroke="black" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></div><div class="ledger-btn ledger-del" onclick="delArch(event,${realIdx})"><svg viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke="red"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>`;
             details.appendChild(r);
         });
@@ -971,36 +959,34 @@ function groupArchiveByMonth(archive) {
     const groups = {}, order = [];
     archive.forEach((entry, realIdx) => {
         const key = new Date(entry.d).toLocaleDateString('en-US',{month:'long',year:'numeric'});
-        if (!groups[key]) { groups[key] = []; order.push(key); }
-        groups[key].push({ entry, realIdx });
+        if (!groups[key]) { groups[key]=[]; order.push(key); }
+        groups[key].push({entry, realIdx});
     });
-    return { groups, order };
+    return {groups, order};
 }
 function getCurrentMonthKey() { return new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}); }
 
 /* ═══════════════════════════════════════
-   MOBILE RENDER
+   RENDER — MOBILE
 ═══════════════════════════════════════ */
 let cur = 0, arcFocus = null, sel = null;
-let orderDirty = false; // true when user has reordered on this device
 
 function render() {
     if (isDesktop()) { renderDesktop(); return; }
-    const views = ['today','next','someday','ledger'];
-    const v = views[cur];
+    const v = ['today','next','someday','ledger'][cur];
     const el = document.getElementById('card');
     const todayShort = getShortDate(new Date());
     el.className = 'card ' + (arcFocus ? 'c-ledger' : 'c-'+(v==='ledger'?'ledger':v));
 
-    if (cur === 3 && !arcFocus) {
+    if (cur===3 && !arcFocus) {
         el.innerHTML = `<div class="hdr"><b id="mob-ledger-title" style="cursor:default;">Ledger</b>${gearSVG}</div><div class="top-rule"></div><div id="ledger-list" style="overflow-y:auto;height:calc(100% - 101px);padding-bottom:40px;"></div>`;
         attachLongPress(document.getElementById('mob-ledger-title'));
         buildLedgerContents(document.getElementById('ledger-list'), null);
         return;
     }
-    const data = arcFocus ? arcFocus.tasks : db[v];
+    const data  = arcFocus ? arcFocus.tasks : db[v];
     const title = arcFocus ? 'Historical' : v.charAt(0).toUpperCase()+v.slice(1);
-    const sub = arcFocus ? arcFocus.d : (cur===0 ? todayShort : (cur===1 ? 'Priority' : 'Ideas'));
+    const sub   = arcFocus ? arcFocus.d : (cur===0 ? todayShort : (cur===1 ? 'Priority' : 'Ideas'));
     el.innerHTML = `<div class="hdr"><b>${title}</b><span>${sub}</span></div><div class="top-rule"></div><ul id="list" class="${cur===0?'today-list':''}"></ul><div id="btn-container"></div>`;
     updateTodayButton();
     const list = document.getElementById('list');
@@ -1015,34 +1001,30 @@ function updateTodayButton() {
 }
 
 /* ═══════════════════════════════════════
-   DESKTOP RENDER
+   RENDER — DESKTOP
 ═══════════════════════════════════════ */
-let dtActiveCol = 0, dtFocusRow = -1, dtLedgerOpen = false;
+let dtActiveCol=0, dtFocusRow=-1, dtLedgerOpen=false;
 
 function renderDesktop() {
     const todayShort = getShortDate(new Date());
-    const cardDefs = [
-        { id:'dt-today',   key:'today',   title:'Today',   sub:todayShort },
-        { id:'dt-next',    key:'next',    title:'Next',    sub:'Priority' },
-        { id:'dt-someday', key:'someday', title:'Someday', sub:'Ideas'    },
-    ];
-    cardDefs.forEach(def => {
-        const cardEl = document.getElementById(def.id);
-        cardEl.innerHTML = '';
-        const hdr = document.createElement('div'); hdr.className = 'dt-hdr';
-        hdr.innerHTML = `<div class="dt-hdr-top"><b>${def.title}</b><span>${def.sub}</span></div>`;
+    [{id:'dt-today',key:'today',title:'Today',sub:todayShort},
+     {id:'dt-next', key:'next', title:'Next', sub:'Priority'},
+     {id:'dt-someday',key:'someday',title:'Someday',sub:'Ideas'}
+    ].forEach(def => {
+        const cardEl = document.getElementById(def.id); cardEl.innerHTML='';
+        const hdr = document.createElement('div'); hdr.className='dt-hdr';
+        hdr.innerHTML=`<div class="dt-hdr-top"><b>${def.title}</b><span>${def.sub}</span></div>`;
         cardEl.appendChild(hdr);
-        const rule = document.createElement('div'); rule.className = 'dt-rule';
-        cardEl.appendChild(rule);
-        const body = document.createElement('div'); body.className = 'dt-body';
-        const ul = document.createElement('ul'); ul.id = `dt-list-${def.key}`;
-        if (def.key==='today') ul.className = 'today-list';
-        db[def.key].forEach((item,i) => ul.appendChild(buildTaskRow(item, i, def.key, false)));
+        const rule = document.createElement('div'); rule.className='dt-rule'; cardEl.appendChild(rule);
+        const body = document.createElement('div'); body.className='dt-body';
+        const ul = document.createElement('ul'); ul.id=`dt-list-${def.key}`;
+        if (def.key==='today') ul.className='today-list';
+        db[def.key].forEach((item,i) => ul.appendChild(buildTaskRow(item,i,def.key,false)));
         body.appendChild(ul); cardEl.appendChild(body);
         if (def.key==='today') {
-            const wrap = document.createElement('div'); wrap.className = 'dt-fin-wrap'; wrap.id = 'dt-btn-container';
-            const has = db.today.some(x=>x.t.trim()!=='');
-            wrap.innerHTML = `<button class="fin-btn" onclick="${has?'fin()':'viewLastArc()'}"> ${has?'Commit Day':'Review Ledger'}</button>`;
+            const wrap=document.createElement('div'); wrap.className='dt-fin-wrap'; wrap.id='dt-btn-container';
+            const has=db.today.some(x=>x.t.trim()!=='');
+            wrap.innerHTML=`<button class="fin-btn" onclick="${has?'fin()':'viewLastArc()'}"> ${has?'Commit Day':'Review Ledger'}</button>`;
             cardEl.appendChild(wrap);
         }
     });
@@ -1051,43 +1033,40 @@ function renderDesktop() {
 }
 
 function renderDrawer() {
-    const body = document.getElementById('dt-drawer-body');
-    const banner = document.getElementById('dt-arc-banner');
-    if (arcFocus) { banner.classList.add('visible'); document.getElementById('dt-arc-date').textContent = arcFocus.d; }
+    const body=document.getElementById('dt-drawer-body');
+    const banner=document.getElementById('dt-arc-banner');
+    if (arcFocus) { banner.classList.add('visible'); document.getElementById('dt-arc-date').textContent=arcFocus.d; }
     else banner.classList.remove('visible');
     buildLedgerContents(body, arcFocus);
 }
 
 /* ── Keyboard nav ── */
 function dtHighlightFocus() {
-    document.querySelectorAll('li.kb-focus').forEach(el => el.classList.remove('kb-focus'));
+    document.querySelectorAll('li.kb-focus').forEach(el=>el.classList.remove('kb-focus'));
     if (!isDesktop()||dtFocusRow<0) return;
-    const ul = document.getElementById(`dt-list-${COLS[dtActiveCol]}`);
-    if (!ul) return;
-    const items = ul.querySelectorAll('li');
+    const ul=document.getElementById(`dt-list-${COLS[dtActiveCol]}`); if(!ul) return;
+    const items=ul.querySelectorAll('li');
     if (items[dtFocusRow]) { items[dtFocusRow].classList.add('kb-focus'); items[dtFocusRow].scrollIntoView({block:'nearest'}); }
 }
 
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', e=>{
     if (!isDesktop()) return;
-    if (e.target.tagName==='INPUT' && e.key!=='Escape') return;
-    if (e.key==='l'||e.key==='L') { dtLedgerOpen ? dtCloseLedger() : dtOpenLedger(); return; }
+    if (e.target.tagName==='INPUT'&&e.key!=='Escape') return;
+    if (e.key==='l'||e.key==='L') { dtLedgerOpen?dtCloseLedger():dtOpenLedger(); return; }
     if (e.key==='Escape') { if(arcFocus){dtClearArc();return;} if(dtLedgerOpen){dtCloseLedger();return;} return; }
     if (e.key==='Tab') { e.preventDefault(); dtActiveCol=(dtActiveCol+(e.shiftKey?-1:1)+3)%3; dtFocusRow=dtFocusRow<0?0:dtFocusRow; dtHighlightFocus(); return; }
     if (e.key==='ArrowDown'||e.key==='ArrowUp') {
         e.preventDefault();
-        const ul = document.getElementById(`dt-list-${COLS[dtActiveCol]}`); if(!ul) return;
-        const count = ul.querySelectorAll('li').length;
-        if (dtFocusRow<0) dtFocusRow=0;
-        else dtFocusRow = e.key==='ArrowDown' ? Math.min(dtFocusRow+1,count-1) : Math.max(dtFocusRow-1,0);
+        const ul=document.getElementById(`dt-list-${COLS[dtActiveCol]}`); if(!ul) return;
+        const n=ul.querySelectorAll('li').length;
+        dtFocusRow=dtFocusRow<0?0:(e.key==='ArrowDown'?Math.min(dtFocusRow+1,n-1):Math.max(dtFocusRow-1,0));
         dtHighlightFocus(); return;
     }
     if (e.key===' '&&dtFocusRow>=0) { e.preventDefault(); tglItem(dtFocusRow,COLS[dtActiveCol]); return; }
     if (e.key==='Enter'&&dtFocusRow>=0) {
         e.preventDefault();
-        const ul = document.getElementById(`dt-list-${COLS[dtActiveCol]}`); if(!ul) return;
-        const inp = ul.querySelectorAll('li')[dtFocusRow]?.querySelector('input');
-        if (inp) inp.focus(); return;
+        const ul=document.getElementById(`dt-list-${COLS[dtActiveCol]}`); if(!ul) return;
+        ul.querySelectorAll('li')[dtFocusRow]?.querySelector('input')?.focus(); return;
     }
 });
 
@@ -1104,64 +1083,68 @@ function tglItem(i, colKey) {
     item.s = (item.s+1)%4;
     const tagMatch = item.t.match(/\((\d+)\)/);
     if (tagMatch) {
-        const goal = parseInt(tagMatch[1]);
-        if (item.s===2) item.c=goal; else if (item.s===0) item.c=0; else if (item.s===1&&(item.c===0||item.c===goal)) item.c=1;
+        const goal=parseInt(tagMatch[1]);
+        if(item.s===2) item.c=goal; else if(item.s===0) item.c=0; else if(item.s===1&&(item.c===0||item.c===goal)) item.c=1;
     }
-    touchTask(item); save(); render();
+    item.u = Date.now();
+    save(); render();
 }
 
-function updItem(i, v, colKey) {
+function typingItem(i, v, colKey) {
+    // Called on every keystroke — save locally but don't push yet
     if (colKey==='arc') return;
     const tagMatch = db[colKey][i].t.match(/\(\d+\)/);
     const tag = tagMatch ? tagMatch[0] : '';
     db[colKey][i].t = tag ? `${v} ${tag}` : v;
-    touchTask(db[colKey][i]); save();
-    if (isDesktop()&&colKey==='today') {
-        const wrap = document.getElementById('dt-btn-container');
-        if (wrap) { const has=db.today.some(x=>x.t.trim()!==''); wrap.innerHTML=`<button class="fin-btn" onclick="${has?'fin()':'viewLastArc()'}"> ${has?'Commit Day':'Review Ledger'}</button>`; }
-    }
+    db[colKey][i].u = Date.now();
+    saveTyping();
+    if (isDesktop()&&colKey==='today') refreshCommitBtn();
     if (!isDesktop()&&cur===0) updateTodayButton();
+}
+
+function refreshCommitBtn() {
+    const wrap=document.getElementById('dt-btn-container'); if(!wrap) return;
+    const has=db.today.some(x=>x.t.trim()!=='');
+    wrap.innerHTML=`<button class="fin-btn" onclick="${has?'fin()':'viewLastArc()'}"> ${has?'Commit Day':'Review Ledger'}</button>`;
 }
 
 function onTaskKey(e, i, colKey) {
     if (e.key!=='Enter') return;
     e.preventDefault();
-    const listId = isDesktop() ? `dt-list-${colKey}` : 'list';
-    const list = document.getElementById(listId); if (!list) return;
-    const next = [...list.querySelectorAll('input')][i+1];
-    if (next) next.focus();
+    const listId=isDesktop()?`dt-list-${colKey}`:'list';
+    const list=document.getElementById(listId); if(!list) return;
+    [...list.querySelectorAll('input')][i+1]?.focus();
 }
 
 function onTaskBlur(i, colKey) {
     if (colKey==='arc') return;
     const item = db[colKey]&&db[colKey][i];
     if (item&&/\(\d+\)/.test(item.t)) render();
-    if (supaSession) scheduleSyncPush();
+    // Now that typing is done, push to cloud
+    if (supaSession) schedulePush();
 }
 
 function cycleDots(idx, colKey) {
     if (!colKey||colKey==='arc') return;
-    const item = db[colKey][idx];
-    const match = item.t.match(/\((\d+)\)/);
-    const goal = match ? parseInt(match[1]) : 0;
-    item.c = (item.c||0)+1;
-    if (item.c>goal) item.c=0;
-    if (item.c===0) item.s=0; else if (item.c===goal) item.s=2; else item.s=1;
-    touchTask(item); save(); render();
+    const item=db[colKey][idx];
+    const match=item.t.match(/\((\d+)\)/); const goal=match?parseInt(match[1]):0;
+    item.c=(item.c||0)+1;
+    if(item.c>goal) item.c=0;
+    if(item.c===0) item.s=0; else if(item.c===goal) item.s=2; else item.s=1;
+    item.u=Date.now(); save(); render();
 }
 
 /* ═══════════════════════════════════════
    DRAG AND DROP
 ═══════════════════════════════════════ */
 let dragEl=null, dragSourceCol=null, dragSourceIdx=null, dragOffsetY=0;
-const ghost = document.getElementById('drag-ghost');
+const ghost=document.getElementById('drag-ghost');
 
 function startDrag(e, i, colKey) {
     if (arcFocus) return;
-    const li = e.target.closest('li');
-    const rect = li.getBoundingClientRect();
+    const li=e.target.closest('li'); const rect=li.getBoundingClientRect();
     dragSourceCol=colKey; dragSourceIdx=i; dragEl=li; dragOffsetY=e.clientY-rect.top;
-    ghost.textContent = db[colKey][i] ? db[colKey][i].t.replace(/\(\d+\)/g,'').trim() : '';
+    ghost.textContent=db[colKey][i]?db[colKey][i].t.replace(/\(\d+\)/g,'').trim():'';
     ghost.style.display='flex'; ghost.style.width=rect.width+'px';
     positionGhost(e.clientX,e.clientY);
     li.style.opacity='0.3'; li.setPointerCapture(e.pointerId); e.preventDefault();
@@ -1170,92 +1153,82 @@ function startDrag(e, i, colKey) {
 function positionGhost(x,y) { const w=ghost.offsetWidth||200; ghost.style.left=(x-w+20)+'px'; ghost.style.top=(y-dragOffsetY)+'px'; }
 
 function getDropTarget(x,y) {
-    let targetCol = dragSourceCol;
+    let targetCol=dragSourceCol;
     if (isDesktop()) {
         for (const key of COLS) {
-            const c = document.querySelector(`.dt-card[data-col="${key}"]`);
-            if (!c) continue;
-            const r = c.getBoundingClientRect();
-            if (x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) { targetCol=key; break; }
+            const c=document.querySelector(`.dt-card[data-col="${key}"]`); if(!c) continue;
+            const r=c.getBoundingClientRect();
+            if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom){targetCol=key;break;}
         }
     }
-    const list = document.getElementById(isDesktop()?`dt-list-${targetCol}`:'list');
-    if (!list) return { targetCol, list:null, slotIdx:0, items:[] };
-    const items = [...list.querySelectorAll('li')];
-    let slotIdx = items.length;
-    for (let i=0;i<items.length;i++) { const r=items[i].getBoundingClientRect(); if (y<r.top+r.height/2){slotIdx=i;break;} }
-    return { targetCol, list, slotIdx, items };
+    const list=document.getElementById(isDesktop()?`dt-list-${targetCol}`:'list');
+    if (!list) return {targetCol,list:null,slotIdx:0,items:[]};
+    const items=[...list.querySelectorAll('li')];
+    let slotIdx=items.length;
+    for(let i=0;i<items.length;i++){const r=items[i].getBoundingClientRect();if(y<r.top+r.height/2){slotIdx=i;break;}}
+    return {targetCol,list,slotIdx,items};
 }
 
-document.addEventListener('pointermove', e => {
+document.addEventListener('pointermove', e=>{
     if (!dragEl||!ghost) return;
     positionGhost(e.clientX,e.clientY);
     document.querySelectorAll('.drop-target-above,.drop-target-below').forEach(el=>el.classList.remove('drop-target-above','drop-target-below'));
-    COLS.forEach(key => { const c=document.querySelector(`.dt-card[data-col="${key}"]`); if(c)c.classList.remove('drag-over'); });
-    const { targetCol, items, slotIdx } = getDropTarget(e.clientX,e.clientY);
-    if (isDesktop()&&targetCol!==dragSourceCol) { const c=document.querySelector(`.dt-card[data-col="${targetCol}"]`); if(c)c.classList.add('drag-over'); }
-    if (items&&items.length>0) { if(slotIdx<items.length) items[slotIdx].classList.add('drop-target-above'); else items[items.length-1].classList.add('drop-target-below'); }
+    COLS.forEach(key=>{const c=document.querySelector(`.dt-card[data-col="${key}"]`);if(c)c.classList.remove('drag-over');});
+    const {targetCol,items,slotIdx}=getDropTarget(e.clientX,e.clientY);
+    if(isDesktop()&&targetCol!==dragSourceCol){const c=document.querySelector(`.dt-card[data-col="${targetCol}"]`);if(c)c.classList.add('drag-over');}
+    if(items&&items.length>0){if(slotIdx<items.length)items[slotIdx].classList.add('drop-target-above');else items[items.length-1].classList.add('drop-target-below');}
 });
 
-document.addEventListener('pointerup', e => {
+document.addEventListener('pointerup', e=>{
     if (!dragEl) return;
     ghost.style.display='none'; dragEl.style.opacity='';
     document.querySelectorAll('.drop-target-above,.drop-target-below').forEach(el=>el.classList.remove('drop-target-above','drop-target-below'));
-    COLS.forEach(key => { const c=document.querySelector(`.dt-card[data-col="${key}"]`); if(c)c.classList.remove('drag-over'); });
-
-    const { targetCol, slotIdx } = getDropTarget(e.clientX,e.clientY);
-    const task = JSON.parse(JSON.stringify(db[dragSourceCol][dragSourceIdx]));
-    touchTask(task);
-
-    if (dragSourceCol===targetCol) {
-        const arr = db[dragSourceCol];
-        const dst = Math.min(slotIdx, arr.length-1);
-        if (dragSourceIdx!==dst) { arr.splice(dragSourceIdx,1); arr.splice(dst,0,task); }
+    COLS.forEach(key=>{const c=document.querySelector(`.dt-card[data-col="${key}"]`);if(c)c.classList.remove('drag-over');});
+    const {targetCol,slotIdx}=getDropTarget(e.clientX,e.clientY);
+    const task=JSON.parse(JSON.stringify(db[dragSourceCol][dragSourceIdx]));
+    task.u=Date.now();
+    if(dragSourceCol===targetCol){
+        const arr=db[dragSourceCol]; const dst=Math.min(slotIdx,arr.length-1);
+        if(dragSourceIdx!==dst){arr.splice(dragSourceIdx,1);arr.splice(dst,0,task);}
     } else {
-        // Remove from source (replace with fresh empty slot preserving position)
-        db[dragSourceCol][dragSourceIdx] = makeEmptySlot();
-        const targetArr = db[targetCol];
-        const dst = Math.min(slotIdx, targetArr.length-1);
-        const firstEmpty = targetArr.findIndex((x,i)=>i>=dst&&x.t.trim()==='');
-        if (firstEmpty!==-1) { targetArr.splice(firstEmpty,1); targetArr.splice(dst,0,task); }
-        else { const anyEmpty=targetArr.findIndex(x=>x.t.trim()===''); if(anyEmpty!==-1){targetArr.splice(anyEmpty,1);targetArr.splice(dst,0,task);}else{targetArr.splice(dst,0,task);targetArr.splice(10);} }
+        db[dragSourceCol][dragSourceIdx]=makeEmptySlot();
+        const arr=db[targetCol]; const dst=Math.min(slotIdx,arr.length-1);
+        const fe=arr.findIndex((x,i)=>i>=dst&&x.t.trim()==='');
+        if(fe!==-1){arr.splice(fe,1);arr.splice(dst,0,task);}
+        else{const ae=arr.findIndex(x=>x.t.trim()==='');if(ae!==-1){arr.splice(ae,1);arr.splice(dst,0,task);}else{arr.splice(dst,0,task);arr.splice(10);}}
     }
-
-    while (db[dragSourceCol].length<10) db[dragSourceCol].push(makeEmptySlot());
-    while (db[targetCol].length<10) db[targetCol].push(makeEmptySlot());
+    while(db[dragSourceCol].length<10)db[dragSourceCol].push(makeEmptySlot());
+    while(db[targetCol].length<10)db[targetCol].push(makeEmptySlot());
     dragEl=null; dragSourceCol=null; dragSourceIdx=null;
-    orderDirty = true;
     save(); render();
 });
 
 /* ═══════════════════════════════════════
    CONTEXT MENU
 ═══════════════════════════════════════ */
-let menuColKey = null;
+let menuColKey=null;
 function openM(i, colKey) {
     sel=i; menuColKey=colKey||(arcFocus?'arc':COLS[cur]);
-    const container = document.getElementById('m-options-container'); container.innerHTML='';
-    const add = (label,action) => { const div=document.createElement('div'); div.className='m-item'; div.innerText=label; div.onclick=()=>mAct(action); container.appendChild(div); };
-    const isArc = arcFocus||menuColKey==='arc';
-    if (isArc) { add('Restore to Today','today'); add('Move to Next','next'); }
-    else { if(menuColKey!=='today')add('Move to Today','today'); if(menuColKey!=='next')add('Move to Next','next'); if(menuColKey!=='someday')add('Move to Someday','someday'); add('Remove Entry','del'); }
-    const src = isArc?arcFocus.tasks:db[menuColKey];
-    const taskText = src[i]?src[i].t.replace(/\(\d+\)/g,'').trim():'';
-    if (taskText) { const d=document.createElement('div'); d.className='m-item'; d.innerText=navigator.share?'Share Task':'Copy Task'; d.onclick=()=>shareTask(taskText); container.appendChild(d); }
+    const container=document.getElementById('m-options-container'); container.innerHTML='';
+    const add=(label,action)=>{const div=document.createElement('div');div.className='m-item';div.innerText=label;div.onclick=()=>mAct(action);container.appendChild(div);};
+    const isArc=arcFocus||menuColKey==='arc';
+    if(isArc){add('Restore to Today','today');add('Move to Next','next');}
+    else{if(menuColKey!=='today')add('Move to Today','today');if(menuColKey!=='next')add('Move to Next','next');if(menuColKey!=='someday')add('Move to Someday','someday');add('Remove Entry','del');}
+    const src=isArc?arcFocus.tasks:db[menuColKey];
+    const txt=src[i]?src[i].t.replace(/\(\d+\)/g,'').trim():'';
+    if(txt){const d=document.createElement('div');d.className='m-item';d.innerText=navigator.share?'Share Task':'Copy Task';d.onclick=()=>shareTask(txt);container.appendChild(d);}
     document.getElementById('menu').classList.add('open'); document.getElementById('ov').style.display='block';
 }
 
 function mAct(a) {
-    const isArc = arcFocus||menuColKey==='arc';
-    const src = isArc?arcFocus.tasks:db[menuColKey];
-    if (a==='del') {
-        src[sel] = makeEmptySlot();
-    } else {
-        const newTask = JSON.parse(JSON.stringify(src[sel])); touchTask(newTask);
-        const ti = db[a].findIndex(x=>x.t.trim()==='');
-        if (ti!==-1) db[a][ti]=newTask; else db[a].push(newTask);
-        if (isArc) src[sel].s=3; else src[sel]=makeEmptySlot();
-        orderDirty = true;
+    const isArc=arcFocus||menuColKey==='arc';
+    const src=isArc?arcFocus.tasks:db[menuColKey];
+    if(a==='del'){src[sel]=makeEmptySlot();}
+    else{
+        const newTask=JSON.parse(JSON.stringify(src[sel])); newTask.u=Date.now();
+        const ti=db[a].findIndex(x=>x.t.trim()==='');
+        if(ti!==-1)db[a][ti]=newTask;else db[a].push(newTask);
+        if(isArc)src[sel].s=3;else src[sel]=makeEmptySlot();
     }
     save(); render(); closeAll();
 }
@@ -1264,169 +1237,131 @@ function mAct(a) {
    LEDGER ACTIONS
 ═══════════════════════════════════════ */
 function viewArc(i) {
-    arcFocus = { tasks: db.archive[i].tasks, d: db.archive[i].d, idx: i };
-    if (isDesktop()) { if (!dtLedgerOpen) dtOpenLedger(); else renderDrawer(); }
-    else {
-        const el = document.getElementById('card'); el.className='card c-ledger';
-        el.innerHTML = `<div class="hdr"><b>Historical</b><span>${arcFocus.d}</span></div><div class="top-rule"></div><ul id="list"></ul>`;
-        const list = document.getElementById('list');
-        arcFocus.tasks.forEach((item,i) => list.appendChild(buildTaskRow(item,i,'arc',true)));
+    arcFocus={tasks:db.archive[i].tasks, d:db.archive[i].d, idx:i};
+    if(isDesktop()){if(!dtLedgerOpen)dtOpenLedger();else renderDrawer();}
+    else{
+        const el=document.getElementById('card'); el.className='card c-ledger';
+        el.innerHTML=`<div class="hdr"><b>Historical</b><span>${arcFocus.d}</span></div><div class="top-rule"></div><ul id="list"></ul>`;
+        arcFocus.tasks.forEach((item,i)=>document.getElementById('list').appendChild(buildTaskRow(item,i,'arc',true)));
     }
 }
 
 function delArch(e, i) {
     e.stopPropagation();
-    if (!confirm('Delete this entry from the Ledger forever?')) return;
-    db.archive.splice(i,1); save();
-    if (isDesktop()&&dtLedgerOpen) { arcFocus=null; renderDrawer(); } else render();
+    if(!confirm('Delete this entry from the Ledger forever?')) return;
+    const entry=db.archive[i];
+    const key=entry.key||entry.d;
+    deletedArchiveKeys.add(key);
+    localStorage.setItem(STORAGE_KEY+'_deleted_arc', JSON.stringify([...deletedArchiveKeys]));
+    db.archive.splice(i,1); saveLocal();
+    // Delete from Supabase
+    if(supaSession){
+        const uid=getUserId();
+        if(uid) fetch(`${SUPA_URL}/rest/v1/ledger_archive?user_id=eq.${uid}&day_key=eq.${encodeURIComponent(key)}`,{
+            method:'DELETE',
+            headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+supaSession.access_token}
+        }).catch(()=>{});
+    }
+    if(isDesktop()&&dtLedgerOpen){arcFocus=null;renderDrawer();}else render();
 }
 
 function viewLastArc() {
-    if (db.archive.length>0) viewArc(db.archive.length-1); else alert('No historical data found.');
+    if(db.archive.length>0)viewArc(db.archive.length-1);else alert('No historical data found.');
 }
 
 function undoFin(idx) {
-    if (!confirm('Restore tasks from this Ledger entry?')) return;
-    db.archive[idx].tasks.forEach(task => {
-        if (task.t.trim()!=='') {
-            const ei = db.today.findIndex(t=>t.t.trim()==='');
-            const t = JSON.parse(JSON.stringify(task)); touchTask(t);
-            if (ei!==-1) db.today[ei]=t; else db.today.push(t);
+    if(!confirm('Restore tasks from this Ledger entry?')) return;
+    db.archive[idx].tasks.forEach(task=>{
+        if(task.t.trim()!==''){
+            const ei=db.today.findIndex(t=>t.t.trim()==='');
+            const t={...JSON.parse(JSON.stringify(task)), u:Date.now()};
+            if(ei!==-1)db.today[ei]=t;else db.today.push(t);
         }
     });
     save();
-    if (isDesktop()) { arcFocus=null; renderDesktop(); renderDrawer(); }
-    else { cur=0; arcFocus=null; render(); }
+    if(isDesktop()){arcFocus=null;renderDesktop();renderDrawer();}
+    else{cur=0;arcFocus=null;render();}
 }
 
 function fin() {
-    if (!confirm('Commit today to the Ledger? Unfinished tasks will migrate forward.')) return;
-    const todayStr = getShortDate(new Date());
-    db.archive.push({ d: todayStr, key: makeArchiveKey(todayStr), tasks: JSON.parse(JSON.stringify(db.today)), u: Date.now() });
-    const migrated = db.today.filter(t=>(t.s===1||t.s===3)&&t.t.trim()!=='');
-    db.today = makeList();
-    migrated.forEach((t,i) => { if(i<10){db.today[i]=JSON.parse(JSON.stringify(t));db.today[i].u=Date.now();} });
+    if(!confirm('Commit today to the Ledger? Unfinished tasks will migrate forward.')) return;
+    const todayStr=getShortDate(new Date());
+    db.archive.push({d:todayStr, key:makeArchiveKey(todayStr), tasks:JSON.parse(JSON.stringify(db.today)), u:Date.now()});
+    const migrated=db.today.filter(t=>(t.s===1||t.s===3)&&t.t.trim()!=='');
+    db.today=makeList();
+    migrated.forEach((t,i)=>{if(i<10)db.today[i]={...JSON.parse(JSON.stringify(t)),u:Date.now()};});
     save(); render();
 }
 
 /* ── Mobile swipe ── */
 function jump(dir) {
-    const el = document.getElementById('card');
-    el.style.transform = `translateX(${-dir*100}%)`;
-    setTimeout(() => {
+    const el=document.getElementById('card');
+    el.style.transform=`translateX(${-dir*100}%)`;
+    setTimeout(()=>{
         cur=(cur+dir+4)%4; arcFocus=null;
         el.style.transition='none'; el.style.transform=`translateX(${dir*100}%)`;
         render();
-        setTimeout(() => { el.style.transition='transform 0.25s cubic-bezier(0.2,1,0.3,1)'; el.style.transform='translateX(0)'; }, 15);
-    }, 200);
+        setTimeout(()=>{el.style.transition='transform 0.25s cubic-bezier(0.2,1,0.3,1)';el.style.transform='translateX(0)';},15);
+    },200);
 }
 let sX=0;
-document.addEventListener('touchstart', e => { sX=e.touches[0].clientX; });
-document.addEventListener('touchend', e => {
-    if (isDesktop()) return;
-    const diff = e.changedTouches[0].clientX-sX;
-    if (Math.abs(diff)>70&&!dragEl) { if(arcFocus){arcFocus=null;render();return;} jump(diff>0?-1:1); }
+document.addEventListener('touchstart',e=>{sX=e.touches[0].clientX;});
+document.addEventListener('touchend',e=>{
+    if(isDesktop()) return;
+    const diff=e.changedTouches[0].clientX-sX;
+    if(Math.abs(diff)>70&&!dragEl){if(arcFocus){arcFocus=null;render();return;}jump(diff>0?-1:1);}
 });
 
 /* ── Share / Copy ── */
 async function shareTask(text) {
-    if (!text||!text.trim()) return;
+    if(!text||!text.trim()) return;
     closeAll();
-    if (navigator.share) { try{await navigator.share({text:text.trim()});}catch(e){} return; }
-    if (navigator.clipboard&&navigator.clipboard.writeText) { try{await navigator.clipboard.writeText(text.trim());showToast('Copied');return;}catch(e){} }
-    try { const ta=document.createElement('textarea'); ta.value=text.trim(); ta.style.cssText='position:fixed;top:0;left:0;opacity:0;'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('Copied'); } catch(e){showToast('Could not copy');}
-}
-
-function showSyncError(msg) {
-    const label = document.getElementById('sync-label');
-    const indicator = document.getElementById('sync-indicator');
-    if (label && indicator) {
-        label.textContent = 'Sync failed — tap for details';
-        indicator.style.pointerEvents = 'auto';
-        indicator.style.cursor = 'pointer';
-        indicator.onclick = () => {
-            alert('Sync error:\n\n' + msg);
-            indicator.style.pointerEvents = 'none';
-            indicator.style.cursor = 'default';
-            indicator.onclick = null;
-        };
-    }
-    console.error('SYNC ERROR:', msg);
+    if(navigator.share){try{await navigator.share({text:text.trim()});}catch(e){}return;}
+    if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(text.trim());showToast('Copied');return;}catch(e){}}
+    try{const ta=document.createElement('textarea');ta.value=text.trim();ta.style.cssText='position:fixed;top:0;left:0;opacity:0;';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Copied');}catch(e){showToast('Could not copy');}
 }
 
 function showToast(msg) {
     let t=document.getElementById('toast');
-    if (!t) { t=document.createElement('div'); t.id='toast'; t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;font-family:sans-serif;font-size:13px;padding:8px 18px;border-radius:20px;z-index:9998;pointer-events:none;transition:opacity 0.3s;'; document.body.appendChild(t); }
+    if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;font-family:sans-serif;font-size:13px;padding:8px 18px;border-radius:20px;z-index:9998;pointer-events:none;transition:opacity 0.3s;';document.body.appendChild(t);}
     t.textContent=msg; t.style.opacity='1'; clearTimeout(t._timer); t._timer=setTimeout(()=>{t.style.opacity='0';},1800);
 }
 
-function openSettings() { document.getElementById('settings-menu').classList.add('open'); document.getElementById('ov').style.display='block'; }
-function closeAll()     { document.getElementById('menu').classList.remove('open'); document.getElementById('settings-menu').classList.remove('open'); document.getElementById('ov').style.display='none'; }
+function openSettings(){document.getElementById('settings-menu').classList.add('open');document.getElementById('ov').style.display='block';}
+function closeAll(){document.getElementById('menu').classList.remove('open');document.getElementById('settings-menu').classList.remove('open');document.getElementById('ov').style.display='none';}
 
 /* ── Backup ── */
 function checkBackupStatus() {
-    const lb = localStorage.getItem(STORAGE_KEY+'_lastBackup');
-    if (!lb) { localStorage.setItem(STORAGE_KEY+'_lastBackup',Date.now().toString()); return; }
-    if ((Date.now()-parseInt(lb))/(1000*60*60*24)>7) { document.getElementById('backup-banner').classList.add('visible'); document.body.classList.add('has-banner'); }
-    // Pull shared backup timestamp from cloud to check if another device backed up recently
+    const lb=localStorage.getItem(STORAGE_KEY+'_lastBackup');
+    if(!lb){localStorage.setItem(STORAGE_KEY+'_lastBackup',Date.now().toString());return;}
+    if((Date.now()-parseInt(lb))/(1000*60*60*24)>7){document.getElementById('backup-banner').classList.add('visible');document.body.classList.add('has-banner');}
     syncBackupTimestamp();
 }
-function dismissBanner() { document.getElementById('backup-banner').classList.remove('visible'); document.body.classList.remove('has-banner'); }
+function dismissBanner(){document.getElementById('backup-banner').classList.remove('visible');document.body.classList.remove('has-banner');}
 function exportData() {
-    const a=document.createElement('a'); a.href='data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(db)); a.download='ledger_backup.json'; a.click();
-    const ts = Date.now();
-    localStorage.setItem(STORAGE_KEY+'_lastBackup', ts.toString());
-    dismissBanner(); closeAll();
-    // Push the backup timestamp to cloud so other devices know
+    const a=document.createElement('a');a.href='data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(db));a.download='ledger_backup.json';a.click();
+    const ts=Date.now(); localStorage.setItem(STORAGE_KEY+'_lastBackup',ts.toString()); dismissBanner(); closeAll();
     pushBackupTimestamp(ts);
-}
-
-async function syncBackupTimestamp() {
-    if (!supaSession) return;
-    const userId = getUserId();
-    if (!userId) return;
-    try {
-        const rows = await supaSelect('ledger_order_v2',
-            `select=order_json,updated_at&user_id=eq.${userId}&list=eq.meta_backup`
-        );
-        if (rows && rows.length > 0) {
-            const remoteTs = parseInt(rows[0].order_json) || 0;
-            const localTs  = parseInt(localStorage.getItem(STORAGE_KEY+'_lastBackup')) || 0;
-            if (remoteTs > localTs) {
-                localStorage.setItem(STORAGE_KEY+'_lastBackup', remoteTs.toString());
-                dismissBanner();
-            }
-        }
-    } catch(e) { /* non-critical */ }
-}
-
-async function pushBackupTimestamp(ts) {
-    if (!supaSession) return;
-    const userId = getUserId();
-    if (!userId) return;
-    try {
-        await supaUpsert('ledger_order_v2', [{
-            user_id:    userId,
-            list:       'meta_backup',
-            order_json: ts.toString(),
-            updated_at: ts
-        }], 'user_id,list');
-    } catch(e) { /* non-critical */ }
 }
 function exportMarkdown() {
     let md='# Ledger\n\n';
-    db.archive.slice().reverse().forEach(day=>{ md+=`## ${day.d}\n`; day.tasks.filter(t=>t.t.trim()!=='').forEach(t=>{md+=`${t.s===2?'[x]':(t.s===3?'[>]':'[ ]')} ${t.t}\n`;}); md+='\n'; });
-    const a=document.createElement('a'); a.href='data:text/markdown;charset=utf-8,'+encodeURIComponent(md); a.download='ledger_history.md'; a.click(); closeAll();
+    db.archive.slice().reverse().forEach(day=>{md+=`## ${day.d}\n`;day.tasks.filter(t=>t.t.trim()!=='').forEach(t=>{md+=`${t.s===2?'[x]':(t.s===3?'[>]':'[ ]')} ${t.t}\n`;});md+='\n';});
+    const a=document.createElement('a');a.href='data:text/markdown;charset=utf-8,'+encodeURIComponent(md);a.download='ledger_history.md';a.click();closeAll();
 }
-function importData() { document.getElementById('fileInput').click(); }
-document.getElementById('fileInput').onchange = e => {
+function importData(){document.getElementById('fileInput').click();}
+document.getElementById('fileInput').onchange=e=>{
     const r=new FileReader();
-    r.onload=ev=>{ db=JSON.parse(ev.target.result); db.today=addMissingIds(db.today); db.next=addMissingIds(db.next); db.someday=addMissingIds(db.someday); db.archive.forEach(entry=>{if(entry.tasks)entry.tasks=addMissingIds(entry.tasks);}); save(); render(); closeAll(); };
+    r.onload=ev=>{
+        db=JSON.parse(ev.target.result);
+        db.today=ensureIds(db.today||makeList()); db.next=ensureIds(db.next||makeList()); db.someday=ensureIds(db.someday||makeList());
+        db.archive.forEach(entry=>{if(!entry.key)entry.key=`${entry.d}::${entry.u||0}`;if(entry.tasks)entry.tasks=ensureIds(entry.tasks);});
+        saveLocal(); render(); closeAll();
+    };
     r.readAsText(e.target.files[0]);
 };
 
-window.addEventListener('resize', () => {
-    if (document.activeElement&&document.activeElement.tagName==='INPUT') return;
+window.addEventListener('resize',()=>{
+    if(document.activeElement?.tagName==='INPUT') return;
     render();
 });
 
@@ -1435,15 +1370,15 @@ window.addEventListener('resize', () => {
 ═══════════════════════════════════════ */
 async function init() {
     checkBackupStatus();
-    render();
-    await handleAuthRedirect();
-    if (!supaSession) restoreSession();
+    render(); // Render immediately from localStorage
+    const redirected = await handleAuthRedirect();
+    if (!redirected) restoreSession(); // not awaited — runs async in background
 }
 
 init();
 
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+    window.addEventListener('load', ()=>{ navigator.serviceWorker.register('/sw.js').catch(()=>{}); });
 }
 </script>
 </body>
