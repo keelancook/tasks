@@ -237,6 +237,7 @@
         <div class="m-item" onclick="exportMarkdown()">Export Ledger (Markdown)</div>
         <div class="m-item" onclick="exportData()">Backup System (JSON)</div>
         <div class="m-item" onclick="importData()">Restore System (JSON)</div>
+        <div id="sync-signin-item" class="m-item" style="display:none;" onclick="openAuthModal();closeAll();">Sign In to Sync</div>
         <div id="sync-push-item"      class="m-item" style="display:none;" onclick="forcePush();closeAll();">Push Data to Cloud</div>
         <div id="sync-pull-item"      class="m-item" style="display:none;" onclick="forcePull();closeAll();">Pull Data from Cloud</div>
         <div id="sync-overwrite-item" class="m-item" style="display:none;color:#991b1b;" onclick="forceOverwrite();">Restore from Cloud</div>
@@ -716,11 +717,15 @@ function setSyncStatus(state, label) {
 }
 
 function updateSyncUI() {
-    const show = supaSession ? 'block' : 'none';
-    ['sync-push-item','sync-pull-item','sync-overwrite-item','sync-signout-item'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.style.display = show;
+    const authed = !!supaSession;
+    const syncEls = ['sync-push-item','sync-pull-item','sync-overwrite-item','sync-signout-item'];
+    syncEls.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = authed ? 'block' : 'none';
     });
-    if (supaSession) setSyncStatus('synced', '');
+    const signin = document.getElementById('sync-signin-item');
+    if (signin) signin.style.display = authed ? 'none' : 'block';
+    if (authed) setSyncStatus('synced', '');
 }
 
 function signOut() {
@@ -1348,9 +1353,10 @@ window.addEventListener('resize',()=>{
 ═══════════════════════════════════════ */
 async function init() {
     checkBackupStatus();
-    render(); // Render immediately from localStorage
+    updateSyncUI(); // show Sign In to Sync immediately
+    render();
     const redirected = await handleAuthRedirect();
-    if (!redirected) restoreSession(); // not awaited — runs async in background
+    if (!redirected) restoreSession();
 }
 
 init();
