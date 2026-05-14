@@ -746,20 +746,43 @@ function signOut() {
 let longPressTimer = null;
 function attachLongPress(el) {
     if (!el) return;
-    el.style.userSelect = 'none'; el.style.webkitUserSelect = 'none'; el.style.cursor = 'default';
-    const start = e => {
+    el.style.userSelect = 'none';
+    el.style.webkitUserSelect = 'none';
+    el.style.cursor = 'default';
+
+    let pressing = false;
+
+    function startPress(e) {
         e.preventDefault();
+        pressing = true;
+        clearTimeout(longPressTimer);
         longPressTimer = setTimeout(() => {
+            if (!pressing) return;
+            pressing = false;
             if (supaSession) {
-                openAuthModal(true); // show "already synced" state
+                openAuthModal(true);
             } else {
-                openAuthModal(false); // show sign in form
+                openAuthModal(false);
             }
         }, 3000);
-    };
-    const cancel = () => clearTimeout(longPressTimer);
-    el.addEventListener('touchstart', start, { passive: false });
-    ['touchend','touchmove','touchcancel','pointerup','pointerleave'].forEach(ev => el.addEventListener(ev, cancel));
+    }
+
+    function cancelPress() {
+        pressing = false;
+        clearTimeout(longPressTimer);
+    }
+
+    // Touch
+    el.addEventListener('touchstart',  startPress,  { passive: false });
+    el.addEventListener('touchend',    cancelPress);
+    el.addEventListener('touchmove',   cancelPress);
+    el.addEventListener('touchcancel', cancelPress);
+
+    // Mouse (desktop)
+    el.addEventListener('mousedown',  startPress);
+    el.addEventListener('mouseup',    cancelPress);
+    el.addEventListener('mouseleave', cancelPress);
+
     el.addEventListener('contextmenu', e => e.preventDefault());
 }
 attachLongPress(document.getElementById('drawer-ledger-title'));
