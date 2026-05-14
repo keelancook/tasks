@@ -85,9 +85,9 @@
         /* ── Sync indicator ── */
         #sync-indicator { position: fixed; bottom: 16px; right: 14px; display: none; z-index: 9000; cursor: default; width: 10px; height: 10px; border-radius: 50%; }
         #sync-indicator.visible { display: block; }
-        #sync-indicator.syncing { background: #facc15; animation: pulse 1s infinite; }
-        #sync-indicator.synced  { background: #4ade80; }
-        #sync-indicator.error   { background: #f87171; cursor: pointer; }
+        #sync-indicator.syncing { background: #b5830a; animation: pulse 1s infinite; }
+        #sync-indicator.synced  { background: #2d6a4f; }
+        #sync-indicator.error   { background: #8b1a1a; cursor: pointer; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
         #sync-error-panel { display: none; position: fixed; bottom: 34px; right: 14px; background: #1a1a1a; color: #fff; font-family: monospace; font-size: 12px; line-height: 1.5; padding: 14px 16px; border-radius: 8px; z-index: 9001; max-width: min(320px, calc(100vw - 28px)); word-break: break-all; border: 1px solid rgba(255,100,100,0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         #sync-error-panel.visible { display: block; }
@@ -106,7 +106,8 @@
         #auth-submit { width: 100%; padding: 11px; background: #1a1a1a; color: #fff; border: none; border-radius: 4px; font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
         #auth-submit:disabled { opacity: 0.5; cursor: default; }
         #auth-msg { margin-top: 14px; font-size: 14px; color: rgba(0,0,0,0.55); font-style: italic; min-height: 20px; }
-        #auth-cancel { margin-top: 10px; width: 100%; padding: 8px; background: transparent; border: none; font-family: 'Cormorant Garamond', serif; font-size: 15px; color: rgba(0,0,0,0.4); cursor: pointer; }
+        #auth-form input, #auth-form button { width: 100%; }
+        #auth-form { display: flex; flex-direction: column; gap: 0; margin-bottom: 0; }
 
         /* ── DESKTOP ── */
         #dt-layout { display: none; }
@@ -176,12 +177,17 @@
     </div>
     <div id="auth-modal">
         <div id="auth-box">
-            <h2>Sync</h2>
-            <p>Enter your email to receive a magic link</p>
-            <input id="auth-email" type="email" placeholder="your@email.com" autocomplete="email">
-            <button id="auth-submit" onclick="submitMagicLink()">Send Link</button>
-            <div id="auth-msg"></div>
-            <button id="auth-cancel" onclick="closeAuthModal()">Cancel</button>
+            <h2 id="auth-title">Sync</h2>
+            <p id="auth-subtitle">Enter your email to receive a magic link</p>
+            <div id="auth-form">
+                <input id="auth-email" type="email" placeholder="your@email.com" autocomplete="email">
+                <button id="auth-submit" onclick="submitMagicLink()">Send Link</button>
+                <div id="auth-msg"></div>
+            </div>
+            <div id="auth-synced-msg" style="display:none; padding: 8px 0 16px; font-size:15px; color:rgba(0,0,0,0.55); font-style:italic;">
+                Sync is active. Your data is connected to the cloud.
+            </div>
+            <button id="auth-cancel" onclick="closeAuthModal()">Close</button>
         </div>
     </div>
 
@@ -237,7 +243,6 @@
         <div class="m-item" onclick="exportMarkdown()">Export Ledger (Markdown)</div>
         <div class="m-item" onclick="exportData()">Backup System (JSON)</div>
         <div class="m-item" onclick="importData()">Restore System (JSON)</div>
-        <div id="sync-signin-item" class="m-item" style="display:none;" onclick="openAuthModal();closeAll();">Sign In to Sync</div>
         <div id="sync-push-item"      class="m-item" style="display:none;" onclick="forcePush();closeAll();">Push Data to Cloud</div>
         <div id="sync-pull-item"      class="m-item" style="display:none;" onclick="forcePull();closeAll();">Pull Data from Cloud</div>
         <div id="sync-overwrite-item" class="m-item" style="display:none;color:#991b1b;" onclick="forceOverwrite();">Restore from Cloud</div>
@@ -718,13 +723,10 @@ function setSyncStatus(state, label) {
 
 function updateSyncUI() {
     const authed = !!supaSession;
-    const syncEls = ['sync-push-item','sync-pull-item','sync-overwrite-item','sync-signout-item'];
-    syncEls.forEach(id => {
+    ['sync-push-item','sync-pull-item','sync-overwrite-item','sync-signout-item'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = authed ? 'block' : 'none';
     });
-    const signin = document.getElementById('sync-signin-item');
-    if (signin) signin.style.display = authed ? 'none' : 'block';
     if (authed) setSyncStatus('synced', '');
 }
 
@@ -748,7 +750,11 @@ function attachLongPress(el) {
     const start = e => {
         e.preventDefault();
         longPressTimer = setTimeout(() => {
-            supaSession ? showToast('Already signed in') : openAuthModal();
+            if (supaSession) {
+                openAuthModal(true); // show "already synced" state
+            } else {
+                openAuthModal(false); // show sign in form
+            }
         }, 3000);
     };
     const cancel = () => clearTimeout(longPressTimer);
@@ -758,12 +764,32 @@ function attachLongPress(el) {
 }
 attachLongPress(document.getElementById('drawer-ledger-title'));
 
-function openAuthModal() {
+function openAuthModal(synced = false) {
+    const form     = document.getElementById('auth-form');
+    const syncedMsg = document.getElementById('auth-synced-msg');
+    const title    = document.getElementById('auth-title');
+    const subtitle = document.getElementById('auth-subtitle');
+    const cancel   = document.getElementById('auth-cancel');
+
+    if (synced) {
+        title.textContent = 'Sync Active';
+        subtitle.style.display = 'none';
+        form.style.display = 'none';
+        syncedMsg.style.display = 'block';
+        cancel.textContent = 'Close';
+    } else {
+        title.textContent = 'Sync';
+        subtitle.style.display = 'block';
+        subtitle.textContent = 'Enter your email to receive a magic link';
+        form.style.display = 'block';
+        syncedMsg.style.display = 'none';
+        cancel.textContent = 'Cancel';
+        document.getElementById('auth-email').value = '';
+        document.getElementById('auth-msg').textContent = '';
+        document.getElementById('auth-submit').disabled = false;
+        setTimeout(() => document.getElementById('auth-email').focus(), 100);
+    }
     document.getElementById('auth-modal').classList.add('visible');
-    document.getElementById('auth-email').value = '';
-    document.getElementById('auth-msg').textContent = '';
-    document.getElementById('auth-submit').disabled = false;
-    setTimeout(() => document.getElementById('auth-email').focus(), 100);
 }
 function closeAuthModal() { document.getElementById('auth-modal').classList.remove('visible'); }
 
