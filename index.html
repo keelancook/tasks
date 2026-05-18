@@ -748,42 +748,31 @@ function attachLongPress(el) {
     if (!el) return;
     el.style.userSelect = 'none';
     el.style.webkitUserSelect = 'none';
+    el.style.webkitTouchCallout = 'none';
     el.style.cursor = 'default';
 
-    let pressing = false;
+    let startX = 0, startY = 0;
 
-    function startPress(e) {
-        e.preventDefault();
-        pressing = true;
+    el.addEventListener('pointerdown', e => {
+        startX = e.clientX;
+        startY = e.clientY;
         clearTimeout(longPressTimer);
         longPressTimer = setTimeout(() => {
-            if (!pressing) return;
-            pressing = false;
-            if (supaSession) {
-                openAuthModal(true);
-            } else {
-                openAuthModal(false);
-            }
-        }, 3000);
-    }
+            openAuthModal(!!supaSession);
+        }, 2000);
+    });
 
-    function cancelPress() {
-        pressing = false;
-        clearTimeout(longPressTimer);
-    }
+    el.addEventListener('pointermove', e => {
+        // Cancel if finger moved more than 10px — user is scrolling not pressing
+        if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) {
+            clearTimeout(longPressTimer);
+        }
+    });
 
-    // Touch
-    el.addEventListener('touchstart',  startPress,  { passive: false });
-    el.addEventListener('touchend',    cancelPress);
-    el.addEventListener('touchmove',   cancelPress);
-    el.addEventListener('touchcancel', cancelPress);
-
-    // Mouse (desktop)
-    el.addEventListener('mousedown',  startPress);
-    el.addEventListener('mouseup',    cancelPress);
-    el.addEventListener('mouseleave', cancelPress);
-
-    el.addEventListener('contextmenu', e => e.preventDefault());
+    el.addEventListener('pointerup',     () => clearTimeout(longPressTimer));
+    el.addEventListener('pointercancel', () => clearTimeout(longPressTimer));
+    el.addEventListener('pointerleave',  () => clearTimeout(longPressTimer));
+    el.addEventListener('contextmenu',   e  => e.preventDefault());
 }
 attachLongPress(document.getElementById('drawer-ledger-title'));
 
@@ -853,6 +842,7 @@ async function handleAuthRedirect() {
     updateSyncUI();
     const card = document.getElementById('card');
     if (card) card.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:'Cormorant Garamond',serif;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,0,0,0.35);">Syncing…</div>`;
+    await syncBackupTimestamp();
     await doPull();
     startRealtime();
     showToast('Sync enabled');
@@ -878,6 +868,7 @@ async function restoreSession() {
     updateSyncUI();
 
     setTimeout(async () => {
+        await syncBackupTimestamp(); // check if another device backed up recently
         const changed = await doPull();
         if (changed) render();
         startRealtime();
